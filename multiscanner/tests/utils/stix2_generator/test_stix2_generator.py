@@ -103,11 +103,10 @@ def test_extract_file_cuckoo():
         r = sample_json.get('Report', {})
         cuckoo = r.get('Cuckoo Sandbox', {})
 
-        for d in cuckoo.get('dropped', []):
-            extracted_indicator_expressions.append(
-                stix2_generator.extract_file_cuckoo(d).pattern
-            )
-
+        extracted_indicator_expressions.extend(
+            stix2_generator.extract_file_cuckoo(d).pattern
+            for d in cuckoo.get('dropped', [])
+        )
     assert all(x in all_indicators_expressions for x in extracted_indicator_expressions)
 
 
@@ -174,8 +173,7 @@ def test_parse_json_report_to_stix2_bundle():
         sample_json = json.load(sample_report)
         bundle = stix2_generator.parse_json_report_to_stix2_bundle(sample_json)
 
-        for x in bundle.objects:
-            if isinstance(x, v20.Indicator):
-                extracted_indicator_expressions.append(x.pattern)
-
+        extracted_indicator_expressions.extend(
+            x.pattern for x in bundle.objects if isinstance(x, v20.Indicator)
+        )
     assert all(x in all_indicators_expressions for x in extracted_indicator_expressions)

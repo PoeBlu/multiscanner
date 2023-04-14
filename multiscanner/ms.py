@@ -202,20 +202,21 @@ def _run_module(modname, mod, filelist, threadDict, global_module_interface, con
             if "replacement path" in conf:
                 # Copy filelist so we don't break the other modules
                 filelist = filelist[:]
-                for i in range(0, len(filelist)):
+                for i in range(len(filelist)):
                     # For windows replacement paths
                     oldname = filelist[i]
                     if re.match("[a-zA-Z]:\\\\", conf["replacement path"]):
-                        if conf["replacement path"].endswith("\\"):
-                            filelist[i] = conf["replacement path"] + basename(filelist[i])
-                        else:
-                            filelist[i] = conf["replacement path"] + "\\" + basename(filelist[i])
-                    # For linux replacement paths
+                        filelist[i] = (
+                            conf["replacement path"] + basename(filelist[i])
+                            if conf["replacement path"].endswith("\\")
+                            else conf["replacement path"]
+                            + "\\"
+                            + basename(filelist[i])
+                        )
+                    elif conf["replacement path"].endswith("/"):
+                        filelist[i] = conf["replacement path"] + basename(filelist[i])
                     else:
-                        if conf["replacement path"].endswith("/"):
-                            filelist[i] = conf["replacement path"] + basename(filelist[i])
-                        else:
-                            filelist[i] = conf["replacement path"] + "/" + basename(filelist[i])
+                        filelist[i] = conf["replacement path"] + "/" + basename(filelist[i])
                     filedict[filelist[i]] = oldname
 
                 # Replace the paths on required modules if any
@@ -224,20 +225,22 @@ def _run_module(modname, mod, filelist, threadDict, global_module_interface, con
                         if mresult is None:
                             continue
                         (result, metadata) = mresult
-                        for j in range(0, len(result)):
+                        for j in range(len(result)):
                             (filename, hit) = result[j]
                             # For windows replacement paths
                             if re.match("[a-zA-Z]:\\\\", conf["replacement path"]):
-                                if conf["replacement path"].endswith("\\"):
-                                    filename = conf["replacement path"] + basename(filename)
-                                else:
-                                    filename = conf["replacement path"] + "\\" + basename(filename)
-                            # For linux replacement paths
+                                filename = (
+                                    conf["replacement path"]
+                                    + basename(filename)
+                                    if conf["replacement path"].endswith("\\")
+                                    else conf["replacement path"]
+                                    + "\\"
+                                    + basename(filename)
+                                )
+                            elif conf["replacement path"].endswith("/"):
+                                filename = conf["replacement path"] + basename(filename)
                             else:
-                                if conf["replacement path"].endswith("/"):
-                                    filename = conf["replacement path"] + basename(filename)
-                                else:
-                                    filename = conf["replacement path"] + "/" + basename(filename)
+                                filename = conf["replacement path"] + "/" + basename(filename)
                             result[j] = (filename, hit)
                     mod.REQUIRES = reqresults
 
@@ -248,22 +251,21 @@ def _run_module(modname, mod, filelist, threadDict, global_module_interface, con
             if filedict and results:
                 (result, metadata) = results
                 modded = False
-                for j in range(0, len(result)):
+                for j in range(len(result)):
                     (filename, hit) = result[j]
                     if filename in filedict:
-                        filename = filedict[filename]
                         modded = True
+                        filename = filedict[filename]
                         result[j] = (filename, hit)
                 if modded:
                     results = (result, metadata)
             return results
         elif VERBOSE:
             print(modname, "failed check(conf)")
-    else:
-        if mod.check() is True:
-            return mod.scan(filelist)
-        elif VERBOSE:
-            print(modname, "failed check()")
+    elif mod.check() is True:
+        return mod.scan(filelist)
+    elif VERBOSE:
+        print(modname, "failed check()")
 
 
 def _update_DEFAULTCONF(defaultconf, filepath):
@@ -331,7 +333,7 @@ def _copy_to_share(filelist, filedic, sharedir):
         # If the new file exists we add in a random ID
         if os.path.exists(newfile):
             uid = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))
-            newfile = uid + '_' + newfile
+            newfile = f'{uid}_{newfile}'
             newfile_path = os.path.join(sharedir, newfile)
         shutil.copyfile(fname, newfile_path)
         filedic[newfile] = fname
@@ -362,9 +364,8 @@ def _start_module_threads(filelist, ModuleList, config, global_module_interface)
             modname = os.path.basename(module[:-3])
 
             # If the module is disabled we don't mess with it further to prevent spamming errors on screen
-            if modname in config:
-                if not config[modname].get('ENABLED', True):
-                    continue
+            if modname in config and not config[modname].get('ENABLED', True):
+                continue
 
             moddir = os.path.dirname(module)
             mod = load_module(os.path.basename(module).split('.')[0], [moddir])
@@ -420,8 +421,9 @@ def _write_missing_module_configs(ModuleList, config, filepath=CONFIG):
             modname = os.path.basename(module).split('.')[0]
             moddir = os.path.dirname(module)
             if modname not in config.sections():
-                mod = load_module(os.path.basename(module).split('.')[0], [moddir])
-                if mod:
+                if mod := load_module(
+                    os.path.basename(module).split('.')[0], [moddir]
+                ):
                     try:
                         conf = mod.DEFAULTCONF
                     except Exception as e:
@@ -462,8 +464,9 @@ def _rewrite_config(ModuleList, config, filepath=CONFIG):
         if module.endswith('.py'):
             modname = os.path.basename(module).split('.')[0]
             moddir = os.path.dirname(module)
-            mod = load_module(os.path.basename(module).split('.')[0], [moddir])
-            if mod:
+            if mod := load_module(
+                os.path.basename(module).split('.')[0], [moddir]
+            ):
                 try:
                     conf = mod.DEFAULTCONF
                 except Exception as e:
@@ -492,11 +495,9 @@ def config_init(filepath, module_list=parseDir(MODULESDIR, recursive=True, exclu
     config = configparser.SafeConfigParser()
     config.optionxform = str
 
-    if filepath:
-        _rewrite_config(module_list, config, filepath)
-    else:
+    if not filepath:
         filepath = determine_configuration_path(filepath)
-        _rewrite_config(module_list, config, filepath)
+    _rewrite_config(module_list, config, filepath)
     print('Configuration file initialized at', filepath)
 
 
@@ -531,9 +532,12 @@ def parse_reports(resultlist, groups=None, ugly=True, includeMetadata=False, pyt
             else:
                 files[fname][metadata['Name']] = hit
         # This is to prevent some modules from showing in metadata reports.
-        if includeMetadata:
-            if metadata['Name'] not in metadatas and metadata.get("Include", True):
-                metadatas[metadata['Name']] = metadata
+        if (
+            includeMetadata
+            and metadata['Name'] not in metadatas
+            and metadata.get("Include", True)
+        ):
+            metadatas[metadata['Name']] = metadata
 
     if includeMetadata:
         finaldata = {"Files": files, "Metadata": metadatas}
@@ -545,10 +549,18 @@ def parse_reports(resultlist, groups=None, ugly=True, includeMetadata=False, pyt
 
     finaldata = convert_encoding(finaldata)
 
-    if not ugly:
-        return json.dumps(finaldata, sort_keys=True, indent=3, ensure_ascii=False)
-    else:
-        return json.dumps(finaldata, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+    return (
+        json.dumps(
+            finaldata,
+            sort_keys=True,
+            separators=(',', ':'),
+            ensure_ascii=False,
+        )
+        if ugly
+        else json.dumps(
+            finaldata, sort_keys=True, indent=3, ensure_ascii=False
+        )
+    )
 
 
 def multiscan(Files, recursive=False, configregen=False, configfile=CONFIG, config=None, module_list=None):
@@ -569,10 +581,7 @@ def multiscan(Files, recursive=False, configregen=False, configfile=CONFIG, conf
 
     # Init some vars
     # If recursive is False we don't parse the file list and take it as is.
-    if recursive:
-        filelist = parseFileList(Files, recursive=recursive)
-    else:
-        filelist = Files
+    filelist = parseFileList(Files, recursive=recursive) if recursive else Files
     # A list of files in the module dir
     if module_list is None:
         module_list = parseDir(MODULESDIR, recursive=True, exclude=["__init__"])
@@ -607,11 +616,7 @@ def multiscan(Files, recursive=False, configregen=False, configfile=CONFIG, conf
             config = {}
         else:
             config['_load_default'] = True
-        if 'main' in config:
-            main_config = config['main']
-        else:
-            main_config = DEFAULTCONF
-
+        main_config = config['main'] if 'main' in config else DEFAULTCONF
     # If none of the files existed
     if not filelist:
         sys.stdout = stdout
@@ -659,7 +664,7 @@ def multiscan(Files, recursive=False, configregen=False, configfile=CONFIG, conf
             if VERBOSE:
                 p = 'Waiting on'
                 for thread in thread_wait_list:
-                    p += ' ' + thread.name
+                    p += f' {thread.name}'
                 p += '...'
                 print(p)
         time.sleep(1)
@@ -682,10 +687,10 @@ def multiscan(Files, recursive=False, configregen=False, configfile=CONFIG, conf
     # Translates file names back to the originals
     if filedic:
         # I have no idea if this is the best way to do in-place modifications
-        for i in range(0, len(results)):
+        for i in range(len(results)):
             (result, metadata) = results[i]
             modded = False
-            for j in range(0, len(result)):
+            for j in range(len(result)):
                 (filename, hit) = result[j]
                 base = basename(filename)
                 if base in filedic:
@@ -695,12 +700,10 @@ def multiscan(Files, recursive=False, configregen=False, configfile=CONFIG, conf
             if modded:
                 results[i] = (result, metadata)
 
-    # Scan subfiles if needed
-    subscan_list = global_module_interface._get_subscan_list()
-    if subscan_list:
+    if subscan_list := global_module_interface._get_subscan_list():
         # Translate from_filename back to original if needed
         if filedic:
-            for i in range(0, len(subscan_list)):
+            for i in range(len(subscan_list)):
                 file_path, from_filename, module_name = subscan_list[i]
                 base = basename(from_filename)
                 if base in filedic:
@@ -732,15 +735,10 @@ def _subscan(subscan_list, config, main_config, module_list, global_module_inter
     filedic = {}
     # Maps the subfile to its parent
     file_mapping = {}
-    # The result list to be returned
-    results = []
-
     # The results to map children to their parent
     parent_results = []
     # Used to map parents to their children
     subfiles_dict = {}
-    # The results to map parents to their children
-    subfiles_results = []
     # The results to show which module created the file
     createdby_results = []
 
@@ -759,15 +757,21 @@ def _subscan(subscan_list, config, main_config, module_list, global_module_inter
         # Add createdby result
         createdby_results.append((new_filename, module_name))
 
-    # Create the results for parent files
-    for parent_file in subfiles_dict:
-        subfiles_results.append((parent_file, subfiles_dict[parent_file]))
-
-    # Emulate a module for so the parent child relationships are in the reports
-    results.append((parent_results, {'Name': 'Parent', 'Type': 'subscan', 'Include': False}))
-    results.append((subfiles_results, {'Name': 'Children', 'Type': 'subscan', 'Include': False}))
-    results.append((createdby_results, {'Name': 'Created by', 'Type': 'subscan', 'Include': False}))
-
+    subfiles_results = list(subfiles_dict.items())
+    results = [
+        (
+            parent_results,
+            {'Name': 'Parent', 'Type': 'subscan', 'Include': False},
+        ),
+        (
+            subfiles_results,
+            {'Name': 'Children', 'Type': 'subscan', 'Include': False},
+        ),
+        (
+            createdby_results,
+            {'Name': 'Created by', 'Type': 'subscan', 'Include': False},
+        ),
+    ]
     del subscan_list, subfiles_dict
 
     # Copy files to a share if configured
@@ -795,7 +799,7 @@ def _subscan(subscan_list, config, main_config, module_list, global_module_inter
             if VERBOSE:
                 p = 'Waiting on'
                 for thread in thread_wait_list:
-                    p += ' ' + thread.name
+                    p += f' {thread.name}'
                 p += '...'
                 print(p)
         time.sleep(1)
@@ -812,9 +816,9 @@ def _subscan(subscan_list, config, main_config, module_list, global_module_inter
         del thread
 
     # I have no idea if this is the best way to do in-place modifications
-    for i in range(0, len(results)):
+    for i in range(len(results)):
         (result, metadata) = results[i]
-        for j in range(0, len(result)):
+        for j in range(len(result)):
             (filename, hit) = result[j]
             base = basename(filename)
             # Convert filename back if copied
@@ -827,10 +831,8 @@ def _subscan(subscan_list, config, main_config, module_list, global_module_inter
                 result[j] = (new_filename, hit)
         results[i] = (result, metadata)
 
-    # Scan subfiles if needed
-    subscan_list = global_module_interface._get_subscan_list()
-    if subscan_list:
-        for i in range(0, len(subscan_list)):
+    if subscan_list := global_module_interface._get_subscan_list():
+        for i in range(len(subscan_list)):
             file_path, from_filename, module_name = subscan_list[i]
             base = basename(from_filename)
             # Translate from_filename back to original if needed
@@ -950,9 +952,8 @@ def _main():
         config_init(args.config)
 
     # Make sure report is not a dir
-    if args.json:
-        if os.path.isdir(args.json):
-            sys.exit('ERROR:', args.json, 'is a directory, a file is expected')
+    if args.json and os.path.isdir(args.json):
+        sys.exit('ERROR:', args.json, 'is a directory, a file is expected')
 
     # Parse the file list
     parsedlist = parseFileList(args.Files, recursive=args.recursive)
@@ -989,7 +990,7 @@ def _main():
                 if fname in parsedlist:
                     parsedlist.remove(fname)
         reportfile.close()
-        i = i - len(parsedlist)
+        i -= len(parsedlist)
         if VERBOSE:
             print("Skipping", i, "files which are in the report already")
 
@@ -1015,11 +1016,8 @@ def _main():
         config.read(args.config)
         config = _get_main_config(config)
         # Make sure we have a group-types
-        if "group-types" not in config:
+        if "group-types" not in config or not config["group-types"]:
             config["group-types"] = []
-        elif not config["group-types"]:
-            config["group-types"] = []
-
         # Add in script metadata
         endtime = str(datetime.datetime.now())
 
@@ -1044,9 +1042,7 @@ def _main():
 
         # Add tags if present
         if args.tag:
-            tag_results = []
-            for filename in filelist:
-                tag_results.append((filename, args.tag))
+            tag_results = [(filename, args.tag) for filename in filelist]
             results.append((
                 tag_results,
                 {

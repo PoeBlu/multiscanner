@@ -38,14 +38,13 @@ def determine_configuration_path(filepath):
         if os.path.exists(config_path):
             config_file = config_path
 
-    if not config_file:
-        # If the local storage folder doesn't exist, we create it.
-        local_storage = os.path.join(os.path.expanduser('~'), '.multiscanner')
-        if not os.path.exists(local_storage):
-            os.makedirs(local_storage)
-        return os.path.join(local_storage, 'config.ini')
-    else:
+    if config_file:
         return config_file
+    # If the local storage folder doesn't exist, we create it.
+    local_storage = os.path.join(os.path.expanduser('~'), '.multiscanner')
+    if not os.path.exists(local_storage):
+        os.makedirs(local_storage)
+    return os.path.join(local_storage, 'config.ini')
 
 
 # The default config file

@@ -35,25 +35,16 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if os.path.isfile(conf["path"]) or SSH:
-        return True
-    else:
-        return False
+    return bool(os.path.isfile(conf["path"]) or SSH) if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
-    if os.path.isfile(conf["path"]):
-        local = True
-    else:
-        local = False
-
+    local = bool(os.path.isfile(conf["path"]))
     cmdline = conf["cmdline"]
     # Generate scan option
     scan = '/SCAN='
     for item in filelist:
-        scan += '"' + item + '";'
+        scan += f'"{item}";'
 
     # Create full command line
     cmdline.insert(0, conf["path"])
@@ -74,28 +65,27 @@ def scan(filelist, conf=DEFAULTCONF):
     output = output.decode("utf-8", errors='replace')
     virusresults = re.findall(r"(?:\([^\)]*\) )?([^\s]+) (.+)\s+$", output, re.MULTILINE)
     results = []
-    for (file, result) in virusresults[:]:
+    for file, result in virusresults[:]:
         if result.endswith(' '):
             result = result[:-1]
         result = result.split(' ')
         if file not in filelist:
             file = file.split(':')[0]
             while file not in filelist and result:
-                file = file + ' ' + result.pop(0)
+                file = f'{file} {result.pop(0)}'
             if file not in filelist or not result:
                 continue
         result = result[-1]
         results.append((file, result))
 
-    metadata = {}
     verinfo = re.search(r"Program version ([\d\.]+), engine ([\d\.]+)", output)
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
+    metadata = {"Name": NAME, "Type": TYPE}
     if verinfo:
-        metadata["Program version"] = verinfo.group(1)
-        metadata["Engine version"] = verinfo.group(2)
-    verinfo = re.search(r"Virus Database: Version ([\d/]+) ([\d-]+)", output)
-    if verinfo:
-        metadata["Definition version"] = verinfo.group(1)
-        metadata["Definition date"] = verinfo.group(2)
+        metadata["Program version"] = verinfo[1]
+        metadata["Engine version"] = verinfo[2]
+    if verinfo := re.search(
+        r"Virus Database: Version ([\d/]+) ([\d-]+)", output
+    ):
+        metadata["Definition version"] = verinfo[1]
+        metadata["Definition date"] = verinfo[2]
     return (results, metadata)

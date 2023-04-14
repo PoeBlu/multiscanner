@@ -20,11 +20,6 @@ def test_subscan():
 def test_async_normal():
     gi = multiscanner._GlobalModuleInterface()
     mi = multiscanner._ModuleInterface('testing', gi)
-    async_list = []
-    for i in range(0, 10):
-        async_list.append(mi.apply_async(add_int, (i, 1)))
-
-    i = 1
-    for a in async_list:
+    async_list = [mi.apply_async(add_int, (i, 1)) for i in range(10)]
+    for i, a in enumerate(async_list, start=1):
         assert i == a.get()
-        i += 1

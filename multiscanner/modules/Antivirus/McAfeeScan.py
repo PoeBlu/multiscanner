@@ -34,26 +34,18 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if os.path.isfile(conf["path"]) or SSH:
-        return True
-    else:
-        return False
+    return bool(os.path.isfile(conf["path"]) or SSH) if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
-    if os.path.isfile(conf["path"]):
-        local = True
-    else:
-        local = False
+    local = bool(os.path.isfile(conf["path"]))
     cmdline = conf["cmdline"]
     path = conf["path"]
     # Fixes list2cmd so we can actually quote things...
     subprocess.list2cmdline = list2cmdline
     # Generate scan option
     for item in filelist:
-        cmdline.append('"' + item + '"')
+        cmdline.append(f'"{item}"')
 
     # Create full command line
     cmdline.insert(0, path)
@@ -73,16 +65,14 @@ def scan(filelist, conf=DEFAULTCONF):
     # Parse output
     output = output.decode("utf-8")
     virusresults = re.findall(r"([^\n\r]+) ... Found: ([^\n\r]+)", output, re.MULTILINE)
-    metadata = {}
     verinfo = re.search(r"McAfee VirusScan Command Line for \S+ Version: ([\d.]+)", output)
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
+    metadata = {"Name": NAME, "Type": TYPE}
     if verinfo:
-        metadata["Program version"] = verinfo.group(1)
+        metadata["Program version"] = verinfo[1]
         verinfo = re.search(r"AV Engine version: ([\d\.]+)\s", output)
-        metadata["Engine version"] = verinfo.group(1)
+        metadata["Engine version"] = verinfo[1]
         verinfo = re.search(r"Dat set version: (\d+) created (\w+ (?:\d|\d\d) \d\d\d\d)", output)
-        metadata["Definition version"] = verinfo.group(1)
-        metadata["Definition date"] = verinfo.group(2)
+        metadata["Definition version"] = verinfo[1]
+        metadata["Definition date"] = verinfo[2]
 
     return (virusresults, metadata)

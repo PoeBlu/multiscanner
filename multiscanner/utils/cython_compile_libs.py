@@ -32,7 +32,7 @@ def main():
                 print('ERROR:', filename, 'failed')
                 logging.exception(e)
             try:
-                os.remove(filename[:-2] + 'c')
+                os.remove(f'{filename[:-2]}c')
             except Exception as e:
                 logging.exception(e)
 

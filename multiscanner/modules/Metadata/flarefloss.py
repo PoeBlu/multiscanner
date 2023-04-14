@@ -18,12 +18,7 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if os.path.isfile(conf['path']):
-        return True
-    else:
-        return False
+    return bool(os.path.isfile(conf['path'])) if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -53,10 +48,7 @@ def scan(filelist, conf=DEFAULTCONF):
         if ret:
             results.append((fname, ret))
 
-    metadata = {}
-    metadata['Name'] = NAME
-    metadata['Type'] = TYPE
-    metadata['Include'] = False
+    metadata = {'Name': NAME, 'Type': TYPE, 'Include': False}
     return (results, metadata)
 
 

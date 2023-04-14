@@ -91,6 +91,7 @@ def _parse_scan_result(response):
     '''
     status_code = response.status_code
 
+    engine_results = []
     if status_code == requests.codes.ok:
         response_json = response.json()
         process_info = response_json.get('process_info', {})
@@ -104,19 +105,16 @@ def _parse_scan_result(response):
             is_complete = False
             overall_status = STATUS_PENDING
             msg = 'Scan results not found; Metadefender has likely not started analysis yet'
-            engine_results = []
         elif prog_percent < PERCENT_SCAN_COMPLETE:
             is_complete = False
             overall_status = STATUS_PENDING
             msg = 'Scan in progress, percent complete: %d' % prog_percent
-            engine_results = []
         else:
             is_complete = True
             overall_status = STATUS_SUCCESS
             msg = ''
             overall_results = response_json.get("scan_results", {})
             scan_details = overall_results.get("scan_details", {})
-            engine_results = []
             for engine_name, engine_output in scan_details.items():
                 scan_code = engine_output.get("scan_result_i", MD_UNKNOWN_SCAN_RES)
                 scan_result_string = MD_SCAN_RES_CODES[scan_code]
@@ -135,8 +133,6 @@ def _parse_scan_result(response):
         # It's possible (though unlikely) that no JSON response was returned
         except ValueError:
             msg = 'No data received from Metadefender'
-        engine_results = []
-
     scan_result = {
         'overall_status': overall_status,
         'msg': msg,
@@ -185,12 +181,11 @@ def _submit_sample(fname, scan_url, user_agent, api_key=None):
         except (ValueError, AttributeError):
             error_msg = MD_HTTP_ERR_CODES.get(resp_status_code, UNKNOWN_ERROR)
 
-    submission_response = {
+    return {
         'status_code': resp_status_code,
         'scan_id': scan_id,
-        'error': error_msg
+        'error': error_msg,
     }
-    return submission_response
 
 
 def _retrieve_scan_results(results_url, scan_id, api_key=None):
@@ -202,11 +197,8 @@ def _retrieve_scan_results(results_url, scan_id, api_key=None):
     Returns:
         requests.Response object
     '''
-    headers = None
-    if api_key:
-        headers = {'apikey': api_key}
-    scan_output = requests.get(results_url + scan_id, headers=headers)
-    return scan_output
+    headers = {'apikey': api_key} if api_key else None
+    return requests.get(results_url + scan_id, headers=headers)
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -235,8 +227,8 @@ def scan(filelist, conf=DEFAULTCONF):
         url = conf['API URL']
     else:
         url = conf['API URL'] + '/'
-    scan_url = url + 'metascan_rest/file'
-    results_url = url + 'metascan_rest/file/'
+    scan_url = f'{url}metascan_rest/file'
+    results_url = f'{url}metascan_rest/file/'
 
     user_agent = conf['user agent']
     for fname in filelist:
@@ -246,9 +238,6 @@ def scan(filelist, conf=DEFAULTCONF):
             task_id = submission_resp['scan_id']
             if task_id is not None:
                 tasks.append((fname, str(task_id)))
-            else:
-                # TODO Do something here?
-                pass
         else:
             err_msg = submission_resp['error']
             print('%s: %s not submitted: Code: %d, Message: %s'
@@ -267,22 +256,17 @@ def scan(filelist, conf=DEFAULTCONF):
                 resultlist.append((fname, scan_result))
                 tasks.remove((fname, task_id))
 
-            # Check for dead tasks
-            else:
-                if task_id not in task_status:
-                    task_status[task_id] = time.time() + conf['timeout'] + conf['running timeout']
-                else:
-                    if time.time() > task_status[task_id]:
-                        # Log timeout
-                        if scan_result['overall_status'] == STATUS_PENDING:
-                            scan_result['overall_status'] = STATUS_TIMEOUT
-                        resultlist.append((fname, scan_result))
-                        tasks.remove((fname, task_id))
+            elif task_id in task_status:
+                if time.time() > task_status[task_id]:
+                    # Log timeout
+                    if scan_result['overall_status'] == STATUS_PENDING:
+                        scan_result['overall_status'] = STATUS_TIMEOUT
+                    resultlist.append((fname, scan_result))
+                    tasks.remove((fname, task_id))
 
+            else:
+                task_status[task_id] = time.time() + conf['timeout'] + conf['running timeout']
         time.sleep(poll_interval_seconds)
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (resultlist, metadata)

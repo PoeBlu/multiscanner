@@ -86,8 +86,7 @@ class SSDeepAnalytic:
 
         records_list = []
         while len(page['hits']['hits']) > 0:
-            for hit in page['hits']['hits']:
-                records_list.append(hit)
+            records_list.extend(iter(page['hits']['hits']))
             sid = page['_scroll_id']
             page = self.es.scroll(scroll_id=sid, scroll='2m')
 
@@ -227,7 +226,7 @@ class SSDeepAnalytic:
             for hit in page['hits']['hits']:
                 hit_src = hit.get('_source')
                 records[hit_src.get('SHA256')] = hit_src.get('ssdeep', {}) \
-                                                        .get('matches', {})
+                                                            .get('matches', {})
             sid = page['_scroll_id']
             page = self.es.scroll(scroll_id=sid, scroll='2m')
 
@@ -235,16 +234,13 @@ class SSDeepAnalytic:
         groups = []
         for sha256_, matches_dict in records.items():
             in_group = False
-            for i in range(len(groups)):
-                if sha256_ in groups[i]:
+            for group in groups:
+                if sha256_ in group:
                     in_group = True
                     continue
-                should_add = True
-                for match_hash in groups[i]:
-                    if match_hash not in records.get(sha256_):
-                        should_add = False
+                should_add = all(match_hash in records.get(sha256_) for match_hash in group)
                 if should_add:
-                    groups[i].append(sha256_)
+                    group.append(sha256_)
                     in_group = True
             if not in_group:
                 groups.append([sha256_])

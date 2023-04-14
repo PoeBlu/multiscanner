@@ -17,10 +17,8 @@ from tqdm import tqdm
 def count_lines(path):
     lines = 0
     with open(path, 'rb') as f:
-        data = f.read(1000000)
-        while data:
+        while data := f.read(1000000):
             lines += data.count('\n')
-            data = f.read(1000000)
     return lines
 
 
@@ -50,21 +48,18 @@ def parse_nsrl(input_file, output_dir):
     count = 0
     last_hash = ''
 
-    for _ in range(0, int(math.pow(16, offset_size))):
+    for _ in range(int(math.pow(16, offset_size))):
         offset.write(struct.pack('QI', 0, 0))
 
     print('Starting to parse, this will take a while...', file=sys.stderr)
 
     with codecs.open(input_file, 'r', 'utf-8', errors='replace') as f:
-        if not six.PY3:
-            reader = unicode_csv_reader(f)
-        else:
-            reader = csv.reader(f)
+        reader = csv.reader(f) if six.PY3 else unicode_csv_reader(f)
         for line in tqdm(reader):
             if line[7] == '' and line[0] != last_hash:
                 last_hash = line[0]
                 i += 1
-                offset_val = int(line[0][0:offset_size], 16)
+                offset_val = int(line[0][:offset_size], 16)
                 if offset_val != last:
                     if last != -1:
                         offset.seek(last * 12 + 8)

@@ -66,12 +66,8 @@ class MongoStorage(storage.Storage):
 
     def get_report(self, report_id):
         result = self.collection.find({'_id': report_id})
-        if result.count == 0:
-            return json.dumps({})
-        return json.dumps(result[0])
+        return json.dumps({}) if result.count == 0 else json.dumps(result[0])
 
     def delete(self, report_id):
         result = self.collection.delete_one({'_id': report_id})
-        if result.deleted_count == 0:
-            return False
-        return True
+        return result.deleted_count != 0

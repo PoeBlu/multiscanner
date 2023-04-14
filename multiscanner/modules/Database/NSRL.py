@@ -56,22 +56,17 @@ def scan(filelist, conf=DEFAULTCONF):
     results = []
     i = 0
     for filename, sha1 in sha1_data:
-        offset_val = int(sha1[0:5], 16)
+        offset_val = int(sha1[:5], 16)
         offset_handle.seek(offset_val * 12)
         pointer, count = struct.unpack('QI', offset_handle.read(12))
         hash_list.seek(pointer)
-        for _ in range(0, count):
+        for _ in range(count):
             line = hash_list.readline().split('\t')
             i += 1
-            if sha1 == line[0]:
-                if md5_data[filename] == line[1]:
-                    results.append((filename, line[2].strip()))
-                    continue
+            if sha1 == line[0] and md5_data[filename] == line[1]:
+                results.append((filename, line[2].strip()))
     hash_list.close()
     offset_handle.close()
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (results, metadata)

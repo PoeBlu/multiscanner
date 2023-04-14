@@ -17,11 +17,7 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if not pyclamd:
-        return False
-    return True
+    return bool(pyclamd) if conf['ENABLED'] else False
 
 
 def _connect_clam():

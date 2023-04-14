@@ -118,18 +118,21 @@ class Database(object):
         if db_type == 'sqlite':
             # we can ignore host, username, password, etc
             sql_lite_db_path = os.path.join(os.path.split(CONFIG)[0], db_name)
-            self.db_connection_string = 'sqlite:///{}'.format(sql_lite_db_path)
+            self.db_connection_string = f'sqlite:///{sql_lite_db_path}'
         else:
             username = self.config['username']
             password = self.config['password']
             host_string = self.config['host_string']
-            self.db_connection_string = '{}://{}:{}@{}/{}'.format(db_type, username, password, host_string, db_name)
+            self.db_connection_string = (
+                f'{db_type}://{username}:{password}@{host_string}/{db_name}'
+            )
 
         self.db_engine = create_engine(self.db_connection_string)
         # If db not present AND type is not SQLite, create the DB
-        if not self.config['db_type'] == 'sqlite':
-            if not database_exists(self.db_engine.url):
-                create_database(self.db_engine.url)
+        if self.config['db_type'] != 'sqlite' and not database_exists(
+            self.db_engine.url
+        ):
+            create_database(self.db_engine.url)
         Base.metadata.bind = self.db_engine
         Base.metadata.create_all()
         # Bind the global Session to our DB engine
@@ -166,15 +169,13 @@ class Database(object):
                 # Need to explicitly commit here in order to update the ID in the DAO
                 ses.commit()
             except IntegrityError as e:
-                print('PRIMARY KEY must be unique! %s' % e)
+                print(f'PRIMARY KEY must be unique! {e}')
                 return -1
-            created_task_id = task.task_id
-            return created_task_id
+            return task.task_id
 
     def update_task(self, task_id, task_status, timestamp=None):
         with self.db_session_scope() as ses:
-            task = ses.query(Task).get(task_id)
-            if task:
+            if task := ses.query(Task).get(task_id):
                 task.task_status = task_status
                 if timestamp:
                     task.timestamp = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f')
@@ -182,8 +183,7 @@ class Database(object):
 
     def get_task(self, task_id):
         with self.db_session_scope() as ses:
-            task = ses.query(Task).get(task_id)
-            if task:
+            if task := ses.query(Task).get(task_id):
                 # unbind Task from Session
                 ses.expunge(task)
                 return task
@@ -242,8 +242,7 @@ class Database(object):
 
     def delete_task(self, task_id):
         with self.db_session_scope() as ses:
-            task = ses.query(Task).get(task_id)
-            if task:
+            if task := ses.query(Task).get(task_id):
                 ses.delete(task)
                 return True
             else:
@@ -260,10 +259,11 @@ class Database(object):
             # Query for most recent task with given sample_id
             subquery = (ses.query(func.max(Task.timestamp))
                 .filter(Task.sample_id == sample_id))
-            task = ses.query(Task).filter(Task.sample_id == sample_id,
-                                          Task.timestamp == subquery).first()
-
-            if task:
+            if (
+                task := ses.query(Task)
+                .filter(Task.sample_id == sample_id, Task.timestamp == subquery)
+                .first()
+            ):
                 return task.task_id
             else:
                 return None

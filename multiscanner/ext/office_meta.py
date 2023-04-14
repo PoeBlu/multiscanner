@@ -142,14 +142,13 @@ class OfficeParser(object):
     def make_fat(self, sector_list):
         fat = array.array('I')
         if self.verbose:
-            print("sector_list = %s" % sector_list)
+            print(f"sector_list = {sector_list}")
         for sector in sector_list:
             sect_data = (self.get_fat_sector(sector))
             if len(sect_data) > 0:
                 fat += array.array('I', self.get_fat_sector(sector))
-            else:
-                if self.verbose:
-                    print("!!!!! Error, invalid SAT table, sector missing")
+            elif self.verbose:
+                print("!!!!! Error, invalid SAT table, sector missing")
         return fat
 
     def parse_office_header(self):
@@ -179,8 +178,9 @@ class OfficeParser(object):
             fat_array = array.array('I', self.data[76:76 + (4 * office_header['num_fat_sect'])])
             self.fat_table = self.make_fat(fat_array)
             if office_header['num_mini_fat_sect'] > 0:
-                mini_fat_sectors = self.get_mini_fat_sector_chain(office_header['first_mini_fat_sect'])
-                if mini_fat_sectors:
+                if mini_fat_sectors := self.get_mini_fat_sector_chain(
+                    office_header['first_mini_fat_sect']
+                ):
                     self.mini_fat_table = self.make_fat(mini_fat_sectors)
         if self.verbose:
             print("[+] FAT Tables")
@@ -200,40 +200,39 @@ class OfficeParser(object):
         return None
 
     def parse_property_set_header(self, prop_data):
-        if len(prop_data) >= 28:
-            system_values = {
-                0:  'Win16',
-                1:  'Macintosh',
-                2:  'Win32',
-            }
-            property_set_header = {
-                'byte_order':           binascii.hexlify(prop_data[:2]),
-                'format':               struct.unpack('H', prop_data[2:4])[0],
-                'system_version':       struct.unpack('I', prop_data[4:8])[0],
-                'clsid':                binascii.hexlify(prop_data[8:24]),
-                'num_properties':       struct.unpack('I', prop_data[24:28])[0],
-                'property_list':        [],
-            }
-            # provide a text string for the system value
-            if property_set_header['num_properties'] not in [1,2] or property_set_header['byte_order'] != b'feff':
-                if self.verbose:
-                    print("[+] invalid property set record")
-                return property_set_header
-            property_set_header['system_name'] = system_values.get(property_set_header['system_version'], 'Unknown')
-            for i in range(property_set_header['num_properties']):
-                if len(prop_data) >= (28 + (i*20) + 20):
-                    offset = (i * 20) + 28
-                    prop = {
-                        'clsid':            binascii.hexlify(prop_data[offset:offset+16]),
-                        'offset':           struct.unpack('I', prop_data[offset+16:offset+20])[0],
-                    }
-                    property_set_header["property_list"].append(prop)
+        if len(prop_data) < 28:
+            return {}
+        system_values = {
+            0:  'Win16',
+            1:  'Macintosh',
+            2:  'Win32',
+        }
+        property_set_header = {
+            'byte_order':           binascii.hexlify(prop_data[:2]),
+            'format':               struct.unpack('H', prop_data[2:4])[0],
+            'system_version':       struct.unpack('I', prop_data[4:8])[0],
+            'clsid':                binascii.hexlify(prop_data[8:24]),
+            'num_properties':       struct.unpack('I', prop_data[24:28])[0],
+            'property_list':        [],
+        }
+        # provide a text string for the system value
+        if property_set_header['num_properties'] not in [1,2] or property_set_header['byte_order'] != b'feff':
+            if self.verbose:
+                print("[+] invalid property set record")
             return property_set_header
-        return {}
+        property_set_header['system_name'] = system_values.get(property_set_header['system_version'], 'Unknown')
+        for i in range(property_set_header['num_properties']):
+            if len(prop_data) >= (28 + (i*20) + 20):
+                offset = (i * 20) + 28
+                prop = {
+                    'clsid':            binascii.hexlify(prop_data[offset:offset+16]),
+                    'offset':           struct.unpack('I', prop_data[offset+16:offset+20])[0],
+                }
+                property_set_header["property_list"].append(prop)
+        return property_set_header
 
     def lookup_property_id(self, prop_id, prop_type):
-        table = self.summary_mapping.get(binascii.unhexlify(prop_type), {})
-        if table:
+        if table := self.summary_mapping.get(binascii.unhexlify(prop_type), {}):
             return table.get(prop_id, 'Unknown (%d)' % prop_id)
         return 'Unknown'
 
@@ -247,57 +246,57 @@ class OfficeParser(object):
         return (timestamp, datestring)
 
     def parse_properties(self, prop_data, prop_type):
-        if len(prop_data) >= 8:
-            properties = {
-                'size':                 struct.unpack('I', prop_data[:4])[0],
-                'num_properties':       struct.unpack('I', prop_data[4:8])[0],
-                'properties':           [],
+        if len(prop_data) < 8:
+            return {}
+        properties = {
+            'size':                 struct.unpack('I', prop_data[:4])[0],
+            'num_properties':       struct.unpack('I', prop_data[4:8])[0],
+            'properties':           [],
+        }
+        for i in range(properties['num_properties']):
+            offset = (i * 8) + 8
+            if len(prop_data) < (offset+8):
+                break
+            prop = {
+                'id':               struct.unpack('I', prop_data[offset:offset+4])[0],
+                'offset':           struct.unpack('I', prop_data[offset+4:offset+8])[0],
             }
-            for i in range(properties['num_properties']):
-                offset = (i * 8) + 8
-                if len(prop_data) < (offset+8):
-                    break
-                prop = {
-                    'id':               struct.unpack('I', prop_data[offset:offset+4])[0],
-                    'offset':           struct.unpack('I', prop_data[offset+4:offset+8])[0],
-                }
-                offset = prop['offset']
-                if offset >= len(prop_data):
-                    continue
-                prop['name'] = self.lookup_property_id(prop['id'], prop_type)
-                prop['type'] = struct.unpack('I', prop_data[offset:offset+4])[0]
-                if prop['type'] == 0x02:
-                    prop['value'] = struct.unpack('h', prop_data[offset+4:offset+6])[0]
-                elif prop['type'] == 0x03:
-                    prop['value'] = struct.unpack('i', prop_data[offset+4:offset+8])[0]
-                elif prop['type'] == 0x1e:
-                    prop['str_len'] = struct.unpack('i', prop_data[offset+4:offset+8])[0]
-                    if properties.get('code_page', 0) == 0x4b0:
-                        prop['value'] = prop_data[offset+8:offset+8+prop['str_len']-2]
-                    else:
-                        prop['value'] = prop_data[offset+8:offset+8+prop['str_len']-1].replace(b'\x00', b'')
-                elif prop['type'] == 0x0b:
-                    prop['value'] = binascii.hexlify(prop_data[offset+4:offset+8])
-                elif prop['type'] == 0x40:
-                    prop['value'] = struct.unpack('Q', prop_data[offset+4:offset+12])[0]
-                    (prop['timestamp'], prop['date']) = self.timestamp_string(prop['value'])
-                elif prop['type'] == 0x1f:
-                    prop['str_len'] = struct.unpack('I', prop_data[offset+4:offset+8])[0]
-                    prop['value'] = prop_data[offset+8: offset+8+(prop['str_len'] * 2)]
+            offset = prop['offset']
+            if offset >= len(prop_data):
+                continue
+            prop['name'] = self.lookup_property_id(prop['id'], prop_type)
+            prop['type'] = struct.unpack('I', prop_data[offset:offset+4])[0]
+            if prop['type'] == 0x02:
+                prop['value'] = struct.unpack('h', prop_data[offset+4:offset+6])[0]
+            elif prop['type'] == 0x03:
+                prop['value'] = struct.unpack('i', prop_data[offset+4:offset+8])[0]
+            elif prop['type'] == 0x1e:
+                prop['str_len'] = struct.unpack('i', prop_data[offset+4:offset+8])[0]
+                if properties.get('code_page', 0) == 0x4b0:
+                    prop['value'] = prop_data[offset+8:offset+8+prop['str_len']-2]
                 else:
-                    prop['value'] = binascii.hexlify(prop_data[:8])
-                if isinstance(prop['value'], str):
-                    prop['value'] = prop['value'].decode('cp1252').encode('utf-8')
-                elif isinstance(prop['value'], bytes):
-                    prop['value'] = prop['value'].decode('utf-8')
-                elif isinstance(prop['value'], int):
-                    prop['value'] = str(prop['value'])
-                prop['result'] = "%s: %s" % (prop['name'], prop['value'])
-                if prop['id'] == 0x01:
-                    properties['code_page'] = prop['result']
-                properties['properties'].append(prop)
-            return properties
-        return {}
+                    prop['value'] = prop_data[offset+8:offset+8+prop['str_len']-1].replace(b'\x00', b'')
+            elif prop['type'] == 0x0b:
+                prop['value'] = binascii.hexlify(prop_data[offset+4:offset+8])
+            elif prop['type'] == 0x40:
+                prop['value'] = struct.unpack('Q', prop_data[offset+4:offset+12])[0]
+                (prop['timestamp'], prop['date']) = self.timestamp_string(prop['value'])
+            elif prop['type'] == 0x1f:
+                prop['str_len'] = struct.unpack('I', prop_data[offset+4:offset+8])[0]
+                prop['value'] = prop_data[offset+8: offset+8+(prop['str_len'] * 2)]
+            else:
+                prop['value'] = binascii.hexlify(prop_data[:8])
+            if isinstance(prop['value'], str):
+                prop['value'] = prop['value'].decode('cp1252').encode('utf-8')
+            elif isinstance(prop['value'], bytes):
+                prop['value'] = prop['value'].decode('utf-8')
+            elif isinstance(prop['value'], int):
+                prop['value'] = str(prop['value'])
+            prop['result'] = f"{prop['name']}: {prop['value']}"
+            if prop['id'] == 0x01:
+                properties['code_page'] = prop['result']
+            properties['properties'].append(prop)
+        return properties
 
     def parse_summary_information(self, summary_data, prop_type):
         if self.verbose:
@@ -338,9 +337,12 @@ class OfficeParser(object):
             name_len = entry['name_len'] - 2
             norm_name = entry['name'][:name_len].replace(b'\x00', b'')
             # check for known subtype headers indicating special objects
-            if len(norm_name) >= 1:
-                if norm_name[0:1] in [b'\x01', b'\x03', b'\x05']:
-                    norm_name = norm_name[1:]
+            if len(norm_name) >= 1 and norm_name[:1] in [
+                b'\x01',
+                b'\x03',
+                b'\x05',
+            ]:
+                norm_name = norm_name[1:]
             entry['norm_name'] = norm_name
             entry['result'] = norm_name
             # fetch any directory data if available
@@ -385,13 +387,15 @@ class OfficeParser(object):
                 prop_summary = self.summary_mapping.get(binascii.unhexlify(prop['clsid']), {})
                 prop_name = prop_summary.get('name', 'Unknown')
                 print("\n\t%s" % prop_name)
-                if len(prop.get('properties', [])) > 0:
-                    if len(prop['properties'].get('properties', [])) > 0:
-                        for item in prop['properties']['properties']:
-                            value = item.get('date', item['value'])
-                            print("%50s - %40s" % (item['name'], value))
+                if (
+                    len(prop.get('properties', [])) > 0
+                    and len(prop['properties'].get('properties', [])) > 0
+                ):
+                    for item in prop['properties']['properties']:
+                        value = item.get('date', item['value'])
+                        print("%50s - %40s" % (item['name'], value))
     def parse_office_doc(self):
-        if (self.find_office_header() == None):
+        if self.find_office_header() is None:
             return None
         self.office_header = self.parse_office_header()
         if self.office_header['maj_ver'] in [3,4]:

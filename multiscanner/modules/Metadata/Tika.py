@@ -23,11 +23,7 @@ except Exception as e:
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if not tika:
-        return False
-    return True
+    return bool(tika) if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -40,7 +36,5 @@ def scan(filelist, conf=DEFAULTCONF):
                 del metadata[field]
         results.append((f, metadata))
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
+    metadata = {"Name": NAME, "Type": TYPE}
     return results, metadata

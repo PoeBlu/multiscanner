@@ -45,9 +45,7 @@ def multiscanner_process(work_queue, config, batch_size, wait_seconds, delete, e
             if filelist and time_stamp:
                 if len(filelist) >= batch_size:
                     pass
-                elif time.time() - time_stamp > wait_seconds:
-                    pass
-                else:
+                elif time.time() - time_stamp <= wait_seconds:
                     continue
             else:
                 continue

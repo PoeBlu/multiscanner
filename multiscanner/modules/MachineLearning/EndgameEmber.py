@@ -54,14 +54,16 @@ def check(conf=DEFAULTCONF):
         return False
 
     if not Path(conf['path-to-model']).is_file():
-        print("'{}' does not exist. Check config.ini for model location.".format(conf['path-to-model']))
+        print(
+            f"'{conf['path-to-model']}' does not exist. Check config.ini for model location."
+        )
         return False
 
     try:
         global LGBM_MODEL
         LGBM_MODEL = lgb.Booster(model_file=conf['path-to-model'])
     except lgb.LightGBMError as e:
-        print("Unable to load model, {}. ({})".format(conf['path-to-model'], e))
+        print(f"Unable to load model, {conf['path-to-model']}. ({e})")
         return False
 
     return True
@@ -82,9 +84,7 @@ def scan(filelist, conf=DEFAULTCONF):
                     (fname, {'Prediction': ember_result})
                 )
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
+    metadata = {"Name": NAME, "Type": TYPE}
     return (results, metadata)
 
 

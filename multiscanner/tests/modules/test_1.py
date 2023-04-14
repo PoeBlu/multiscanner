@@ -10,13 +10,6 @@ def check():
 
 
 def scan(filelist):
-    results = []
-
-    for fname in filelist:
-        results.append((fname, fname))
-
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    results = [(fname, fname) for fname in filelist]
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return results, metadata

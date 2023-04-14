@@ -18,10 +18,7 @@ NAME = "ssdeep"
 
 
 def check():
-    if ssdeep:
-        return True
-    else:
-        return False
+    return bool(ssdeep)
 
 
 def scan(filelist):
@@ -51,8 +48,5 @@ def scan(filelist):
                 time.sleep(3)
                 i += 1
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (results, metadata)

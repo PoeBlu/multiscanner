@@ -36,11 +36,7 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if not os.path.isdir(conf['vstk_home']):
-        return False
-    return True
+    return bool(os.path.isdir(conf['vstk_home'])) if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -61,11 +57,7 @@ def scan(filelist, conf=DEFAULTCONF):
     vfind_version = ""
     try:
         vfind_version = re.search(r"^##==> VFind Version: (\d+), Release: (\d+), Patchlevel: (\d+) .+", output)
-        vfind_version = "{}.{}.{}".format(
-            vfind_version.group(1),
-            vfind_version.group(2),
-            vfind_version.group(3)
-        )
+        vfind_version = f"{vfind_version[1]}.{vfind_version[2]}.{vfind_version[3]}"
     except Exception as e:
         # TODO: log exception
         pass

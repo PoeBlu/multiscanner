@@ -62,10 +62,7 @@ class ThreadCounter(object):
         self.event.wait(timeout=timeout)
 
     def is_done(self):
-        if self.value == 0:
-            return True
-        else:
-            return False
+        return self.value == 0
 
 
 class Storage(object):
@@ -117,9 +114,7 @@ class StorageHandler(object):
                 config = utils.parse_config(config_object)
         else:
             if config is None:
-                config = {}
-                for storage_name in storage_classes:
-                    config[storage_name] = {}
+                config = {storage_name: {} for storage_name in storage_classes}
             config['_load_default'] = True
 
         self.sleep_time = config.get('main', {}).get('retry_time', DEFAULTCONF['retry_time'])
@@ -159,7 +154,7 @@ class StorageHandler(object):
 
         # Sleep and retry until storage setup is successful
         storage_error = None
-        for x in range(0, self.num_retries):
+        for x in range(self.num_retries):
             for storage_name in self.storage_classes:
                 storage = self.storage_classes[storage_name]
                 if storage_name in self.loaded_storage:  # already loaded
@@ -171,24 +166,28 @@ class StorageHandler(object):
                             self.loaded_storage[storage_name] = storage
                     except Exception as e:
                         storage_error = e
-                        print('ERROR:', 'storage', storage_name, 'failed to load.', e)
+                        print('ERROR:', 'storage', storage_name, 'failed to load.', storage_error)
                 elif storage_name == required_module and storage.config['ENABLED'] is False:
-                    raise StorageNotLoadedError('{} module is required but not loaded!'.format(required_module))
+                    raise StorageNotLoadedError(
+                        f'{required_module} module is required but not loaded!'
+                    )
 
-            if not self.loaded_storage:
+            if (
+                self.loaded_storage
+                and required_module
+                and required_module in self.loaded_storage
+                or self.loaded_storage
+                and not required_module
+            ):
+                storage_error = None
+            elif self.loaded_storage:
+                print(f'WARNING: Required storage {required_module} not loaded.')
+                if x < self.num_retries:
+                    print('Retrying...')
+            else:
                 print('ERROR: No storage classes loaded.')
                 if x < self.num_retries:
                     print('Retrying...')
-            elif required_module:
-                if required_module in self.loaded_storage:
-                    storage_error = None
-                else:
-                    print('WARNING: Required storage {} not loaded.'.format(required_module))
-                    if x < self.num_retries:
-                        print('Retrying...')
-            else:
-                storage_error = None
-
             if storage_error:
                 time.sleep(self.sleep_time)
             else:
@@ -196,7 +195,7 @@ class StorageHandler(object):
 
         if storage_error:
             if required_module:
-                raise StorageNotLoadedError('{} module not loaded!'.format(required_module))
+                raise StorageNotLoadedError(f'{required_module} module not loaded!')
             else:
                 raise StorageNotLoadedError('No storage module loaded!')
 
@@ -252,11 +251,10 @@ class StorageHandler(object):
         self.loaded_storage = {}
 
     def is_done(self, wait=False):
-        if wait:
-            self.storage_counter.wait()
-            return True
-        else:
+        if not wait:
             return self.storage_counter.is_done()
+        self.storage_counter.wait()
+        return True
 
 
 def config_init(filepath, overwrite=False, storage_classes=None):
@@ -282,8 +280,7 @@ def _write_main_config(config_object):
 
 
 def _rewrite_config(storage_classes, config_object, filepath):
-    keys = list(storage_classes.keys())
-    keys.sort()
+    keys = sorted(storage_classes.keys())
     for class_name in keys:
         conf = storage_classes[class_name].DEFAULTCONF
         config_object.add_section(class_name)
@@ -305,8 +302,7 @@ def _write_missing_config(config_object, filepath, storage_classes=None):
     if storage_classes is None:
         storage_classes = _get_storage_classes()
     ConfNeedsWrite = False
-    keys = list(storage_classes.keys())
-    keys.sort()
+    keys = sorted(storage_classes.keys())
     for module in keys:
         if module in config_object:
             continue

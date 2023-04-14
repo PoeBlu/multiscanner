@@ -75,10 +75,16 @@ def create_pdf_document(DIR, report):
             file_data.append(['SSDEEP', r.get('ssdeep', {}).get('ssdeep_hash', '')])
 
         if 'Yara' in r:
-            for v in r.get('Yara', {}).values():
-                if 'meta' in v:
-                    yara_data.append([v.get('rule', 'NO RULE NAME'),
-                                      v.get('meta', {}).get('description', 'NO RULE DESCRIPTION')])
+            yara_data.extend(
+                [
+                    v.get('rule', 'NO RULE NAME'),
+                    v.get('meta', {}).get(
+                        'description', 'NO RULE DESCRIPTION'
+                    ),
+                ]
+                for v in r.get('Yara', {}).values()
+                if 'meta' in v
+            )
         if 'AVG 2014' in r:
             av_data.append(['AVG 2014', r.get('AVG 2014', '')])
         if 'Microsoft Security Essentials' in r:

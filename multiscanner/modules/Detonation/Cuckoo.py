@@ -25,17 +25,13 @@ DEFAULTCONF = {
 
 def fetch_report_json(report_url):
     report = requests.get(report_url)
-    if report.status_code == 200:
-        return report.json()
-    return {}
+    return report.json() if report.status_code == 200 else {}
 
 
 def normalize_url(url):
     """Removes trailing '/' from url.
     """
-    if url.endswith('/'):
-        return url[:-1]
-    return url
+    return url[:-1] if url.endswith('/') else url
 
 
 def check(conf=DEFAULTCONF):
@@ -49,10 +45,10 @@ def scan(filelist, conf=DEFAULTCONF):
     api_url = normalize_url(conf['API URL'])
     web_url = normalize_url(conf['WEB URL'])
 
-    new_file_url = api_url + 'tasks/create/file'
-    report_url = api_url + 'tasks/report/'
-    view_url = api_url + 'tasks/view/'
-    delete_url = api_url + 'tasks/delete/'
+    new_file_url = f'{api_url}tasks/create/file'
+    report_url = f'{api_url}tasks/report/'
+    view_url = f'{api_url}tasks/view/'
+    delete_url = f'{api_url}tasks/delete/'
     maec_report_url = (
         '<a href="{api_url}/v1/tasks/report/{{task_id}}/maec" target="_blank">'
         'View the Cuckoo MAEC report</a>'
@@ -71,10 +67,6 @@ def scan(filelist, conf=DEFAULTCONF):
         task_id = request.json()["task_id"]
         if task_id is not None:
             tasks.append((fname, str(task_id)))
-        else:
-            # TODO Do something here?
-            pass
-
     # Wait for tasks to finish
     task_status = {}
     while tasks:
@@ -100,23 +92,17 @@ def scan(filelist, conf=DEFAULTCONF):
                 if conf['delete tasks']:
                     requests.get(delete_url + task_id)
 
-            # Check for dead tasks
             elif status == 'running':
                 if task_id not in task_status:
                     task_status[task_id] = time.time() + conf['timeout'] + conf['running timeout']
-                else:
-                    if time.time() > task_status[task_id]:
-                        # TODO Log timeout
-                        tasks.remove((fname, task_id))
+                elif time.time() > task_status[task_id]:
+                    # TODO Log timeout
+                    tasks.remove((fname, task_id))
 
-            # If there is an unknown status
             elif status not in ['pending', 'processing', 'finished', 'completed', 'running']:
                 # TODO Log errors better
                 tasks.remove((fname, task_id))
         time.sleep(15)
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (resultlist, metadata)

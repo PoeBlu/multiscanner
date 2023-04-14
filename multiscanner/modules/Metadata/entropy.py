@@ -30,8 +30,5 @@ def scan(filelist, conf=DEFAULTCONF):
         result = -sum(count / lns * math.log(count / lns, 2) for count in chars.values())
         results.append((fname, result))
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (results, metadata)

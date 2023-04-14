@@ -40,7 +40,7 @@ class MockResponse(object):
 
 
 def generate_scan_id(filename):
-    return filename + '_scan_ID'
+    return f'{filename}_scan_ID'
 
 # ---------------------------------------------------------------------
 #  Mock Requests methods for sample submission
@@ -54,8 +54,7 @@ def mocked_requests_post_sample_submitted(*args, **kwargs):
     '''
     filename = kwargs['headers']['filename']
     json_resp = json.dumps({'data_id': generate_scan_id(filename)})
-    response = MockResponse(200, json_resp)
-    return response
+    return MockResponse(200, json_resp)
 
 
 def mocked_requests_post_sample_failed_w_msg(*args, **kwargs):
@@ -65,8 +64,7 @@ def mocked_requests_post_sample_failed_w_msg(*args, **kwargs):
     server being unavailable
     '''
     json_resp = json.dumps({'err': MSG_SERVER_UNAVAILABLE})
-    response = MockResponse(500, json_resp)
-    return response
+    return MockResponse(500, json_resp)
 
 
 def mocked_requests_post_sample_failed_no_msg(*args, **kwargs):
@@ -75,8 +73,7 @@ def mocked_requests_post_sample_failed_no_msg(*args, **kwargs):
     returning a 500 error with no error message
     '''
     json_resp = 'None'
-    response = MockResponse(500, json_resp)
-    return response
+    return MockResponse(500, json_resp)
 
 # ---------------------------------------------------------------------
 #  Mock Requests methods for scan retrieval
@@ -91,8 +88,7 @@ def mocked_requests_get_sample_200_success(*args, **kwargs):
     file_200_resp = os.path.join(CWD, FILE_200_COMPLETE_REPORT)
     with open(file_200_resp, 'r') as jsonfile:
         json_resp = jsonfile.read().replace('\n', '')
-    response = MockResponse(200, json_resp)
-    return response
+    return MockResponse(200, json_resp)
 
 
 def mocked_requests_get_sample_200_not_found(*args, **kwargs):
@@ -102,8 +98,7 @@ def mocked_requests_get_sample_200_not_found(*args, **kwargs):
     Metadefender returns a 200 even though a 404 seems more appropriate...
     '''
     json_resp = json.dumps({SCAN_IDS[0]: 'Not Found'})
-    response = MockResponse(200, json_resp)
-    return response
+    return MockResponse(200, json_resp)
 
 
 def mocked_requests_get_sample_200_in_progress(*args, **kwargs):
@@ -115,8 +110,7 @@ def mocked_requests_get_sample_200_in_progress(*args, **kwargs):
     file_200_resp = os.path.join(CWD, FILE_200_INCOMPLETE_REPORT)
     with open(file_200_resp, 'r') as jsonfile:
         json_resp = jsonfile.read().replace('\n', '')
-    response = MockResponse(200, json_resp)
-    return response
+    return MockResponse(200, json_resp)
 
 # Unit test class
 
@@ -203,20 +197,17 @@ class MetadefenderTest(unittest.TestCase):
             engine_name = engine_result['engine_name']
             scan_result = engine_result['scan_result']
             threat_found = engine_result['threat_found']
-            if engine_name == 'ClamAV':
-                self.assertEquals(scan_result, 'Infected/Known')
-                self.assertEquals(threat_found, 'Heuristics.PDF.ObfuscatedNameObject')
-            elif engine_name == 'Ahnlab':
+            if engine_name == 'Ahnlab':
                 self.assertEquals(scan_result, 'Infected/Known')
                 self.assertEquals(threat_found, 'Trojan/Win32.Inject.C1515213')
-            elif engine_name == 'ESET':
-                self.assertEquals(scan_result, 'No threats Found')
-                self.assertEquals(threat_found, '')
-            elif engine_name == 'Avira':
+            elif engine_name == 'ClamAV':
+                self.assertEquals(scan_result, 'Infected/Known')
+                self.assertEquals(threat_found, 'Heuristics.PDF.ObfuscatedNameObject')
+            elif engine_name in ['ESET', 'Avira']:
                 self.assertEquals(scan_result, 'No threats Found')
                 self.assertEquals(threat_found, '')
             else:
-                self.fail('Unexpected Engine: %s' % engine_name)
+                self.fail(f'Unexpected Engine: {engine_name}')
 
     @mock.patch('Metadefender.requests.get', side_effect=mocked_requests_get_sample_200_not_found)
     def test_get_results_200_not_found(self, mock_get):

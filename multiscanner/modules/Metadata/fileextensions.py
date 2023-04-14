@@ -23,10 +23,7 @@ EXTENSION_BLACKLIST = [
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    else:
-        return True
+    return bool(conf['ENABLED'])
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -41,30 +38,13 @@ def scan(filelist, conf=DEFAULTCONF):
             libmagicr = _get_libmagicresults(REQUIRES[0][0], fname)
         else:
             libmagicr = []
-        if REQUIRES[1] is not None:
-            tikar = _get_tikaresults(REQUIRES[1][0], fname)
-        else:
-            tikar = []
-        if REQUIRES[2] is not None:
-            tridr = _get_tridresults(REQUIRES[2][0], fname)
-        else:
-            tridr = []
-        if REQUIRES[3] is not None:
-            vtr = _get_vtresults(REQUIRES[3][0], fname)
-        else:
-            vtr = []
-
-        result = {}
-        result['libmagic'] = libmagicr
-        result['tika'] = tikar
-        result['trid'] = tridr
-        result['vt'] = vtr
+        tikar = [] if REQUIRES[1] is None else _get_tikaresults(REQUIRES[1][0], fname)
+        tridr = [] if REQUIRES[2] is None else _get_tridresults(REQUIRES[2][0], fname)
+        vtr = _get_vtresults(REQUIRES[3][0], fname) if REQUIRES[3] is not None else []
+        result = {'libmagic': libmagicr, 'tika': tikar, 'trid': tridr, 'vt': vtr}
         results.append((fname, result))
 
-    metadata = {}
-    metadata['Name'] = NAME
-    metadata['Type'] = TYPE
-    metadata['Include'] = False
+    metadata = {'Name': NAME, 'Type': TYPE, 'Include': False}
     return (results, metadata)
 
 
@@ -101,9 +81,7 @@ def _get_tridresults(results, fname):
     # pull out all the possible extensions. Then,
     # make them all lowercase and de-duplicate them.
     triddict = dict(results)
-    result = []
-    for tridresult in triddict.get(fname):
-        result.append(tridresult[2].lower())
+    result = [tridresult[2].lower() for tridresult in triddict.get(fname)]
     # make trid results unique
     result = list(set(result))
     return result
@@ -117,11 +95,10 @@ def _get_vtresults(results, fname):
     result = []
     for submission_name in vtdict.get(fname, {}).get('submission_names', []):
         if '.' in submission_name:
-            extension = '.{}'.format(submission_name.split('.')[-1])
+            extension = f".{submission_name.split('.')[-1]}"
             if extension not in EXTENSION_BLACKLIST:
                 result.append(extension)
-    result = list(set(result))
-    return result
+    return list(set(result))
 
 
 def _convert_libmagic_to_extension(libmagicresult):

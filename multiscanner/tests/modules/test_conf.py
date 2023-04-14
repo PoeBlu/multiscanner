@@ -13,8 +13,5 @@ def check(conf=DEFAULTCONF):
 def scan(filelist, conf=DEFAULTCONF):
     results = []
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata['conf'] = conf
+    metadata = {"Name": NAME, "Type": TYPE, 'conf': conf}
     return results, metadata

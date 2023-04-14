@@ -80,10 +80,7 @@ def setup_periodic_tasks(sender, **kwargs):
         ssdeep_compare_celery.s(),
     )
 
-    # Delete old metricbeat indices
-    # Executes every morning at 3:00 a.m.
-    metricbeat_enabled = es_storage_config.get('metricbeat_enabled', True)
-    if metricbeat_enabled:
+    if metricbeat_enabled := es_storage_config.get('metricbeat_enabled', True):
         sender.add_periodic_task(
             crontab(hour=3, minute=0),
             metricbeat_rollover.s(days=es_storage_config.get('metricbeat_rollover_days')),
@@ -100,8 +97,8 @@ class MultiScannerTask(Task):
         When a task fails, update the task DB with a "Failed"
         status. Dump a traceback to local logs
         '''
-        logger.error('Task #{} failed'.format(args[2]))
-        logger.error('Traceback info:\n{}'.format(einfo))
+        logger.error(f'Task #{args[2]} failed')
+        logger.error(f'Traceback info:\n{einfo}')
 
         # Initialize the connection to the task DB
         db.init_db()
@@ -166,17 +163,16 @@ def multiscanner_celery(file_, original_filename, task_id, file_hash, metadata,
         for key in full_conf:
             if key == 'main':
                 continue
-            sub_conf[key] = {}
-            sub_conf[key]['ENABLED'] = full_conf[key]['ENABLED']
+            sub_conf[key] = {'ENABLED': full_conf[key]['ENABLED']}
             if sub_conf[key]['ENABLED'] is True:
                 total_enabled += 1
 
     results[file_]['Scan Metadata'] = metadata
     results[file_]['Scan Metadata']['Worker Node'] = gethostname()
     results[file_]['Scan Metadata']['Scan Config'] = sub_conf
-    results[file_]['Scan Metadata']['Modules Enabled'] = '{} / {}'.format(
-        total_enabled, total_modules
-    )
+    results[file_]['Scan Metadata'][
+        'Modules Enabled'
+    ] = f'{total_enabled} / {total_modules}'
     results[file_]['Scan Metadata']['Scan Time'] = scan_time
     results[file_]['Scan Metadata']['Task ID'] = task_id
 
@@ -203,7 +199,7 @@ def multiscanner_celery(file_, original_filename, task_id, file_hash, metadata,
         timestamp=scan_time,
     )
 
-    logger.info('Completed Task #{}'.format(task_id))
+    logger.info(f'Completed Task #{task_id}')
 
     return results
 
@@ -248,7 +244,7 @@ def metricbeat_rollover(days, config=MS_CONFIG):
                 if ret is False:
                     logger.warn('Metricbeat Roller failed')
                 else:
-                    logger.info('Metricbeat indices older than {} days deleted'.format(days))
+                    logger.info(f'Metricbeat indices older than {days} days deleted')
     except Exception as e:
         logger.warn(e)
     finally:

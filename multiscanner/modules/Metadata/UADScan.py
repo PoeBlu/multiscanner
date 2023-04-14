@@ -26,11 +26,7 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if not os.path.isdir(conf['vstk_home']):
-        return False
-    return True
+    return bool(os.path.isdir(conf['vstk_home'])) if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):

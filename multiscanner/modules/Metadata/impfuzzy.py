@@ -21,11 +21,7 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED'] or \
-       not pyimpfuzzy or \
-       None in REQUIRES:
-        return False
-    return True
+    return bool(conf['ENABLED'] and pyimpfuzzy and None not in REQUIRES)
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -51,8 +47,5 @@ def scan(filelist, conf=DEFAULTCONF):
 
         results.append((fname, doc))
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (results, metadata)

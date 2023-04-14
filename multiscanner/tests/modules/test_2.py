@@ -8,9 +8,7 @@ DEFAULTCONF = {'a': 1, 'b': 2}
 
 
 def check(conf=DEFAULTCONF):
-    if None in REQUIRES:
-        return False
-    return True
+    return None not in REQUIRES
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -25,8 +23,5 @@ def scan(filelist, conf=DEFAULTCONF):
         else:
             results.append((fname, fname))
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = True
+    metadata = {"Name": NAME, "Type": TYPE, "Include": True}
     return results, metadata

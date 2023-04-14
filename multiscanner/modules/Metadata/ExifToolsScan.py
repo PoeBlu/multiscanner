@@ -43,23 +43,16 @@ def check(conf=DEFAULTCONF):
             del conf['replacement path']
         return True
 
-    if SSH:
-        return True
-    else:
-        return False
+    return bool(SSH)
 
 
 def scan(filelist, conf=DEFAULTCONF):
-    if os.path.isfile(conf["path"]):
-        local = True
-    else:
-        local = False
-
+    local = bool(os.path.isfile(conf["path"]))
     cmdline = conf["cmdline"]
     results = []
     cmd = cmdline
     for item in filelist:
-        cmd.append('"' + item + '" ')
+        cmd.append(f'"{item}" ')
     cmd.insert(0, conf["path"])
 
     host, port, user = conf["host"]

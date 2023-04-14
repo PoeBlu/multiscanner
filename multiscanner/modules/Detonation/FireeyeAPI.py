@@ -59,14 +59,10 @@ def _request(conf, path, method=None, **kwargs):
     if not token:
         _authenticate(conf)
     if not method:
-        if 'data' in kwargs:
-            method = 'POST'
-        else:
-            method = 'GET'
-
+        method = 'POST' if 'data' in kwargs else 'GET'
     headers = {'X-FeApi-Token': token, 'Accept': 'application/json'}
     if 'headers' in kwargs:
-        headers.update(kwargs['headers'])
+        headers |= kwargs['headers']
     kwargs['headers'] = headers
 
     if method == 'GET':
@@ -114,7 +110,7 @@ def scan(filelist, conf=DEFAULTCONF):
 
     while waitlist:
         for fname, fid in waitlist[:]:
-            resp = _request(conf, '/submissions/status/' + fid)
+            resp = _request(conf, f'/submissions/status/{fid}')
             resp.raise_for_status()
             if resp.json()['submissionStatus'] == 'In Progress':
                 continue
@@ -126,7 +122,11 @@ def scan(filelist, conf=DEFAULTCONF):
         time.sleep(20)
 
     for fname, fid in donelist:
-        resp = _request(conf, '/submissions/results/' + fid, params={'info_level': conf['info level']})
+        resp = _request(
+            conf,
+            f'/submissions/results/{fid}',
+            params={'info_level': conf['info level']},
+        )
         resp.raise_for_status()
         resultlist.append((fname, resp.json()))
 

@@ -22,11 +22,7 @@ except ImportError as e:
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if not has_mmbot:
-        return False
-    return True
+    return bool(has_mmbot) if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -37,21 +33,19 @@ def scan(filelist, conf=DEFAULTCONF):
 
     for fname in filelist:
         # Ensure libmagic returns results
-        if REQUIRES[0] is not None:
-            # only run the analytic if it is an Office document
-            if 'Microsoft' in _get_libmagicresults(REQUIRES[0][0], fname):
-                result = mmb.mmb_predict(fname, datatype='filepath')
-                prediction = result.iloc[0].get('prediction', None)
-                confidence = result.iloc[0].get('result_dictionary', {}).get('confidence')
-                result_dict = {
-                    'Prediction': prediction,
-                    'Confidence': confidence
-                }
-                results.append((fname, result_dict))
+        if REQUIRES[0] is not None and 'Microsoft' in _get_libmagicresults(
+            REQUIRES[0][0], fname
+        ):
+            result = mmb.mmb_predict(fname, datatype='filepath')
+            prediction = result.iloc[0].get('prediction', None)
+            confidence = result.iloc[0].get('result_dictionary', {}).get('confidence')
+            result_dict = {
+                'Prediction': prediction,
+                'Confidence': confidence
+            }
+            results.append((fname, result_dict))
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
+    metadata = {"Name": NAME, "Type": TYPE}
     return (results, metadata)
 
 

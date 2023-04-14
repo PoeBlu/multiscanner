@@ -31,11 +31,7 @@ except ImportError:
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if not yara:
-        return False
-    return True
+    return bool(yara) if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -101,16 +97,12 @@ def scan(filelist, conf=DEFAULTCONF):
                         'tags': h.tags,
                     }
                     try:
-                        h_key = '{}:{}'.format(hit_dict['namespace'].split('/')[-1], hit_dict['rule'])
+                        h_key = f"{hit_dict['namespace'].split('/')[-1]}:{hit_dict['rule']}"
                     except IndexError:
-                        h_key = '{}'.format(hit_dict['rule'])
+                        h_key = f"{hit_dict['rule']}"
                     hdict[h_key] = hit_dict
             matches.append((m, hdict))
 
-    metadata = {}
-    rulelist = list(ruleset)
-    rulelist.sort()
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Rules"] = rulelist
+    rulelist = sorted(ruleset)
+    metadata = {"Name": NAME, "Type": TYPE, "Rules": rulelist}
     return (matches, metadata)

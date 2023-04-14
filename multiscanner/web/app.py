@@ -51,11 +51,10 @@ app.config.from_object(conf_tuple)
 
 @app.context_processor
 def inject_locs():
-    d = {
+    return {
         'api_loc': app.config.get('API_LOC', DEFAULTCONF['API_LOC']),
-        'flower_loc': app.config.get('FLOWER_LOC', DEFAULTCONF['FLOWER_LOC'])
+        'flower_loc': app.config.get('FLOWER_LOC', DEFAULTCONF['FLOWER_LOC']),
     }
-    return d
 
 
 @app.route('/', methods=['GET'])

@@ -52,10 +52,7 @@ class GenericPDF(object):
         self.style.add(ParagraphStyle(name='bullet_list',
                                       parent=self.style['Normal'],
                                       fontSize=11))
-        if six.PY3:
-            self.buffer = six.BytesIO()
-        else:
-            self.buffer = six.StringIO()
+        self.buffer = six.BytesIO() if six.PY3 else six.StringIO()
         self.firstPage = True
         self.document = SimpleDocTemplate(self.buffer, pagesize=letter,
                                           rightMargin=12.7 * mm, leftMargin=12.7 * mm,
@@ -114,8 +111,11 @@ class GenericPDF(object):
                                               alignment=TA_RIGHT))
 
             banner = Paragraph(
-                self.span_text(self.bold_text('TLP:' + self.tlp_color), bgcolor='black'),
-                self.style['banner_style'])
+                self.span_text(
+                    self.bold_text(f'TLP:{self.tlp_color}'), bgcolor='black'
+                ),
+                self.style['banner_style'],
+            )
             w, h = banner.wrap(doc.width, doc.topMargin)
             banner.drawOn(canvas, doc.leftMargin, doc.height + doc.topMargin + (h + 12 * mm))
             w, h = banner.wrap(doc.width, doc.bottomMargin)
@@ -126,7 +126,9 @@ class GenericPDF(object):
         return height_adjust
 
     def same_line(self, label, body):
-        return Paragraph(self.bold_text(label) + ':  ' + body, self.style['section_body'])
+        return Paragraph(
+            f'{self.bold_text(label)}:  {body}', self.style['section_body']
+        )
 
     def section(self, title, body, is_header=False):
         if is_header:
@@ -136,16 +138,14 @@ class GenericPDF(object):
             title = self.underline_text(title)
             body = cgi.html.escape(body)
 
-        items = []
         headline = Paragraph(title, section_header)
-        items.append(headline)
-
+        items = [headline]
         for paragraph in body.split('<br/><br/>'):
             try:
-                para = Paragraph(paragraph + '<br/><br/>', self.style['section_body'])
+                para = Paragraph(f'{paragraph}<br/><br/>', self.style['section_body'])
                 items.append(para)
             except Exception as e:
-                print('Error Creating PDF: ' + str(e))
+                print(f'Error Creating PDF: {str(e)}')
 
         return items
 
@@ -159,7 +159,7 @@ class GenericPDF(object):
                                        value='bulletchar')
                 items.append(bullet_text)
             except Exception as e:
-                print('Error Creating PDF: ' + str(e))
+                print(f'Error Creating PDF: {str(e)}')
 
         return ListFlowable(items, bulletType='bullet', start='bulletchar')
 
@@ -177,11 +177,7 @@ class GenericPDF(object):
                 ('ALIGN', (1, 1), (-1, -1), 'RIGHT')
             ])
 
-        if col_widths:
-            cols = col_widths
-        else:
-            cols = (35 * mm, 140 * mm)
-
+        cols = col_widths if col_widths else (35 * mm, 140 * mm)
         data2 = [[Paragraph(self.bold_text(cell), self.style['BodyText']) if idx == 0
                   else Paragraph(cell, self.style['BodyText'])
                   for idx, cell in enumerate(row)] for row in data]
@@ -203,11 +199,7 @@ class GenericPDF(object):
                 ('ALIGN', (1, 1), (-1, -1), 'RIGHT')
             ])
 
-        if col_widths:
-            cols = col_widths
-        else:
-            cols = (35 * mm, 140 * mm)
-
+        cols = col_widths if col_widths else (35 * mm, 140 * mm)
         data2 = [[Paragraph(self.bold_text(cell), self.style['BodyText']) if idx == 0
                   else Paragraph(cell, self.style['BodyText'])
                   for cell in row] for idx, row in enumerate(data)]
@@ -229,11 +221,11 @@ class GenericPDF(object):
 
     @staticmethod
     def bold_text(text):
-        return '<b>' + text + '</b>'
+        return f'<b>{text}</b>'
 
     @staticmethod
     def underline_text(text):
-        return '<u>' + text + '</u>'
+        return f'<u>{text}</u>'
 
     @staticmethod
     def span_text(text, **kwargs):

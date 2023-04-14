@@ -20,7 +20,5 @@ def scan(filelist):
         if multiscanner.run_count < 2:
             multiscanner.scan_file(str(multiscanner.run_count), f)
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
+    metadata = {"Name": NAME, "Type": TYPE}
     return results, metadata

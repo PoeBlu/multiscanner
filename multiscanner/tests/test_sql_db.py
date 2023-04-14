@@ -140,7 +140,7 @@ class TestGetAllTasks(unittest.TestCase):
     def setUp(self):
         self.sql_db = Database(config=DB_CONF)
         self.sql_db.init_db()
-        for i in range(0, 3):
+        for i in range(3):
             self.sql_db.add_task()
             i += 1
 
@@ -149,7 +149,7 @@ class TestGetAllTasks(unittest.TestCase):
             {'task_id': i, 'sample_id': None, 'task_status': 'Pending', 'timestamp': None} for i in range(1, 4)
         ]
         resp = self.sql_db.get_all_tasks()
-        for i in range(0, 3):
+        for i in range(3):
             self.assertDictEqual(expected_response[i], resp[i])
 
     def tearDown(self):
@@ -163,7 +163,7 @@ class TestStressTest(unittest.TestCase):
     def setUp(self):
         self.sql_db = Database(config=DB_CONF)
         self.sql_db.init_db()
-        for i in range(0, 1000):
+        for i in range(1000):
             self.sql_db.add_task()
             i += 1
 

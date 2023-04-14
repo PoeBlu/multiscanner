@@ -22,12 +22,12 @@ class File(storage.Storage):
 
     def store(self, results):
         if self.config['files-per-line'] and self.config['files-per-line'] > 0:
-            writedata = {}
             metadata = None
             if ['Files', 'Metadata'] == results.keys():
                 metadata = results['Metadata']
                 results = results['Files']
             i = 0
+            writedata = {}
             for filename in results:
                 writedata[filename] = results[filename]
                 i += 1
@@ -59,17 +59,16 @@ class File(storage.Storage):
                         json.dumps(writedata, sort_keys=True, separators=(',', ':'),
                         ensure_ascii=False))
                     self.file_handle.write('\n')
+        elif self.config['gzip'] is True:
+            self.file_handle.write(
+                json.dumps(results, sort_keys=True, separators=(',', ':'),
+                ensure_ascii=False).encode('utf8', 'replace'))
+            self.file_handle.write(b'\n')
         else:
-            if self.config['gzip'] is True:
-                self.file_handle.write(
-                    json.dumps(results, sort_keys=True, separators=(',', ':'),
-                    ensure_ascii=False).encode('utf8', 'replace'))
-                self.file_handle.write(b'\n')
-            else:
-                self.file_handle.write(
-                    json.dumps(results, sort_keys=True, separators=(',', ':'),
-                    ensure_ascii=False))
-                self.file_handle.write('\n')
+            self.file_handle.write(
+                json.dumps(results, sort_keys=True, separators=(',', ':'),
+                ensure_ascii=False))
+            self.file_handle.write('\n')
 
     def teardown(self):
         self.file_handle.close()

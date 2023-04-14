@@ -50,7 +50,7 @@ def process_cuckoo_signatures(signatures):
                         # This presented itself in testing with signatures.marks.section which would sometimes be a
                         # PE section string such as 'UPX'  and other times full details about the section as a
                         # dictionary in the case of packer_upx and packer_entropy signatures
-                        new_mark['%s_dict' % k] = v
+                        new_mark[f'{k}_dict'] = v
                     else:
                         # If it is not a mark it is fine to leave key as is
                         new_mark[k] = v
@@ -77,9 +77,7 @@ class ElasticSearchStorage(storage.Storage):
 
     def setup(self):
         host_string = self.config['host']
-        host_list = []
-        for host in host_string.split(','):
-            host_list.append(host.strip(' '))
+        host_list = [host.strip(' ') for host in host_string.split(',')]
         self.hosts = host_list
         self.port = self.config['port']
         self.index = self.config['index']
@@ -187,16 +185,13 @@ class ElasticSearchStorage(storage.Storage):
                     'summary': cuckoo_report.get('behavior', {}).get('summary'),
                     'info': cuckoo_report.get('info')
                 }
-                signatures = cuckoo_report.get('signatures')
-                if signatures:
+                if signatures := cuckoo_report.get('signatures'):
                     cuckoo_doc['signatures'] = process_cuckoo_signatures(signatures)
 
-                dropped = cuckoo_report.get('dropped')
-                if dropped:
+                if dropped := cuckoo_report.get('dropped'):
                     cuckoo_doc['dropped'] = dropped
 
-                procmemory = cuckoo_report.get('procmemory')
-                if procmemory:
+                if procmemory := cuckoo_report.get('procmemory'):
                     cuckoo_doc['procmemory'] = procmemory
 
                 # TODO: add the API calls to the Cuckoo Report document
@@ -216,7 +211,7 @@ class ElasticSearchStorage(storage.Storage):
                                               pipeline='dedot', routing=sample_id)
             except (TransportError, UnicodeEncodeError) as e:
                 # If fail, index empty doc instead
-                print('Failed to index that report!\n{}'.format(e))
+                print(f'Failed to index that report!\n{e}')
                 report_body_fail = {
                     'doc_type': {
                         'name': 'report',
@@ -332,7 +327,7 @@ class ElasticSearchStorage(storage.Storage):
             es_reserved_chars_re = r'([\+\-=\>\<\!\(\)\{\}\[\]\^\"\~\*\?\:\\/ ])'
             query_string = re.sub(es_reserved_chars_re, r'\\\g<1>', query_string)
             if search_type == 'default':
-                query = self.build_query("*" + query_string + "*")
+                query = self.build_query(f"*{query_string}*")
             elif search_type == 'exact':
                 query = self.build_query("\"" + query_string + "\"")
             else:
@@ -364,11 +359,9 @@ class ElasticSearchStorage(storage.Storage):
         }
 
         try:
-            result = self.es.update(
-                index=self.index, doc_type=self.doc_type,
-                id=sample_id, body=script
+            return self.es.update(
+                index=self.index, doc_type=self.doc_type, id=sample_id, body=script
             )
-            return result
         except Exception as e:
             # TODO: log exception
             return None
@@ -386,11 +379,9 @@ class ElasticSearchStorage(storage.Storage):
         }
 
         try:
-            result = self.es.update(
-                index=self.index, doc_type=self.doc_type,
-                id=sample_id, body=script
+            return self.es.update(
+                index=self.index, doc_type=self.doc_type, id=sample_id, body=script
             )
-            return result
         except Exception as e:
             # TODO: log exception
             return None
@@ -439,18 +430,16 @@ class ElasticSearchStorage(storage.Storage):
         if search_after:
             query['search_after'] = search_after
 
-        result = self.es.search(
-            index=self.index, doc_type=self.doc_type, body=query
-        )
-        return result
+        return self.es.search(index=self.index, doc_type=self.doc_type, body=query)
 
     def get_note(self, sample_id, note_id):
         try:
-            result = self.es.get(
-                index=self.index, doc_type=self.doc_type,
-                id=note_id, routing=sample_id
+            return self.es.get(
+                index=self.index,
+                doc_type=self.doc_type,
+                id=note_id,
+                routing=sample_id,
             )
-            return result
         except Exception as e:
             # TODO: log exception
             return None
@@ -482,11 +471,9 @@ class ElasticSearchStorage(storage.Storage):
         return result
 
     def delete_note(self, sample_id, note_id):
-        result = self.es.delete(
-            index=self.index, doc_type=self.doc_type, id=note_id,
-            routing=sample_id
+        return self.es.delete(
+            index=self.index, doc_type=self.doc_type, id=note_id, routing=sample_id
         )
-        return result
 
     def delete(self, report_id):
         try:

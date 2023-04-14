@@ -28,11 +28,7 @@ DEFAULTCONF = {
 def check(conf=DEFAULTCONF):
     if not conf['ENABLED']:
         return False
-    if None in REQUIRES:
-        return False
-    if not conf['apikey']:
-        return False
-    return True
+    return False if None in REQUIRES else bool(conf['apikey'])
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -51,8 +47,8 @@ def scan(filelist, conf=DEFAULTCONF):
             requests.append([])
         requests[-1].append(md5)
         md5name[md5] = fname
+    url = 'https://www.virustotal.com/vtapi/v2/file/report'
     for md5list in requests:
-        url = 'https://www.virustotal.com/vtapi/v2/file/report'
         result = None
         while not result:
             param = {'resource': ', '.join(md5list), 'apikey': apikey}
@@ -69,17 +65,11 @@ def scan(filelist, conf=DEFAULTCONF):
         jdata = json.loads(result)
         if isinstance(jdata, list):
             for j in jdata:
-                ret = _vt_report(j, md5name)
-                if ret:
+                if ret := _vt_report(j, md5name):
                     results.append(ret)
-        else:
-            ret = _vt_report(jdata, md5name)
-            if ret:
-                results.append(ret)
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+        elif ret := _vt_report(jdata, md5name):
+            results.append(ret)
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (results, metadata)
 
 
@@ -95,5 +85,4 @@ def _vt_report(report, md5name):
 
 def _repeatlist(data):
     while True:
-        for d in data:
-            yield d
+        yield from data

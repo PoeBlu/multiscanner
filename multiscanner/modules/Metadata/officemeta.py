@@ -24,11 +24,7 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if None in REQUIRES:
-        return False
-    return True
+    return None not in REQUIRES if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -43,28 +39,28 @@ def scan(filelist, conf=DEFAULTCONF):
             except Exception as e:
                 print('officemeta', e)
                 traceback.print_exc(file=sys.stdout)
-            if ret:
-                results.append((fname, ret))
+        if ret:
+            results.append((fname, ret))
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (results, metadata)
 
 
 def run(data):
-    ret = {}
-    ret['directory'] = {}
-    # ret['doc_meta'] = []
-    ret['doc_meta'] = {}
     oparser = OfficeParser(data)
     oparser.parse_office_doc()
     if not oparser.office_header.get('maj_ver'):
         print('officemeta', 'Could not parse file as an office document')
         return
-    ret['office_header'] = '%d.%d' % (oparser.office_header.get('maj_ver'), oparser.office_header.get('min_ver'))
-
+    ret = {
+        'directory': {},
+        'doc_meta': {},
+        'office_header': '%d.%d'
+        % (
+            oparser.office_header.get('maj_ver'),
+            oparser.office_header.get('min_ver'),
+        ),
+    }
     for curr_dir in oparser.directory:
         result = {
             'md5': curr_dir.get('md5', ''),
@@ -72,12 +68,10 @@ def run(data):
             'mod_time': oparser.timestamp_string(curr_dir['modify_time'])[1],
             'create_time': oparser.timestamp_string(curr_dir['create_time'])[1],
         }
-        name = curr_dir['norm_name'].decode('ascii', errors='ignore')
-        # TODO: why is this '' sometimes?
-        if name:
+        if name := curr_dir['norm_name'].decode('ascii', errors='ignore'):
             ret['directory'][name] = result
-        # stream_md5 = hashlib.md5(curr_dir.get('data', b'')).hexdigest()
-        # ret['added_files'].append((name, stream_md5))
+            # stream_md5 = hashlib.md5(curr_dir.get('data', b'')).hexdigest()
+            # ret['added_files'].append((name, stream_md5))
 
     for prop_list in oparser.properties:
         for prop in prop_list['property_list']:

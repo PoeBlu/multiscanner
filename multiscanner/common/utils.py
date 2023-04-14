@@ -55,9 +55,15 @@ def convert_encoding(data, encoding='UTF-8', errors='replace'):
     """
     if isinstance(data, dict):
         if PY3:
-            return dict((convert_encoding(key), convert_encoding(value)) for key, value in data.items())
+            return {
+                convert_encoding(key): convert_encoding(value)
+                for key, value in data.items()
+            }
         else:
-            return dict((convert_encoding(key), convert_encoding(value)) for key, value in data.iteritems())
+            return {
+                convert_encoding(key): convert_encoding(value)
+                for key, value in data.iteritems()
+            }
     elif isinstance(data, list):
         return [convert_encoding(element) for element in data]
     elif isinstance(data, str):
@@ -99,7 +105,7 @@ def get_config_path(config_file, component):
     conf.read(config_file)
     conf = parse_config(conf)
     try:
-        return conf['main']['%s-config' % component]
+        return conf['main'][f'{component}-config']
     except KeyError:
         print("ERROR: Couldn't find '%s-config' value in 'main' section "
               "of config file. Have you run 'python multiscanner.py init'?"
@@ -112,9 +118,8 @@ def dirname(path):
     split = path.split('/')
     if len(split) > 1:
         return '/'.join(split[:-1])
-    else:
-        split = path.split('\\')
-        return '\\'.join(split[:-1])
+    split = path.split('\\')
+    return '\\'.join(split[:-1])
 
 
 def basename(path):
@@ -122,11 +127,9 @@ def basename(path):
     if path.endswith('/') or path.endswith('\\'):
         path = path[:-1]
     split = path.split('/')
-    if len(split) > 1:
-        return split[-1]
-    else:
+    if len(split) <= 1:
         split = path.split('\\')
-        return split[-1]
+    return split[-1]
 
 
 def parseDir(directory, recursive=False, exclude=['__init__']):
@@ -174,8 +177,6 @@ def parseFileList(FileList, recursive=False):
                 filelist.append(item.decode('utf8'))
             else:
                 filelist.append(item)
-        else:
-            pass
     return filelist
 
 
@@ -191,8 +192,7 @@ def chunk_file_list(filelist, cmdlength=7191):
     # 8191 is the windows limit
     filechunks = []
     if len(list2cmdline(filelist)) >= cmdlength:
-        filechunks.append(filelist[:len(filelist) / 2])
-        filechunks.append(filelist[len(filelist) / 2:])
+        filechunks.extend((filelist[:len(filelist) / 2], filelist[len(filelist) / 2:]))
         # Keeps splitting chunks until all are correct size
         splitter = True
         while splitter:
@@ -200,8 +200,7 @@ def chunk_file_list(filelist, cmdlength=7191):
             for chunk in filechunks[:]:
                 if len(list2cmdline(chunk)) >= cmdlength:
                     filechunks.remove(chunk)
-                    filechunks.append(chunk[:len(chunk) / 2])
-                    filechunks.append(chunk[len(chunk) / 2:])
+                    filechunks.extend((chunk[:len(chunk) / 2], chunk[len(chunk) / 2:]))
                     splitter = True
     else:
         filechunks = [filelist]
@@ -224,12 +223,11 @@ def hashfile(fname, hasher, blocksize=65536):
     hasher - The hasher from hashlib. E.g. hashlib.md5()
     blocksize - The size of each block to read in from the file
     """
-    afile = open(fname, 'rb')
-    buf = afile.read(blocksize)
-    while len(buf) > 0:
-        hasher.update(buf)
+    with open(fname, 'rb') as afile:
         buf = afile.read(blocksize)
-    afile.close()
+        while len(buf) > 0:
+            hasher.update(buf)
+            buf = afile.read(blocksize)
     return hasher.hexdigest()
 
 

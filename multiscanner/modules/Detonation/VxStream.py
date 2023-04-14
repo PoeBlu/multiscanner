@@ -116,7 +116,7 @@ def post_to_vxstream(f_name, environment_id,
             if res.status_code == 200:
                 return res.json()
             else:
-                print('Error code: {}, returned when uploading: {}'.format(res.status_code, f.name))
+                print(f'Error code: {res.status_code}, returned when uploading: {f.name}')
         except requests.exceptions.HTTPError as err:
             print(err)
 
@@ -124,16 +124,17 @@ def post_to_vxstream(f_name, environment_id,
 def get_file_status(file_sha256, status_url, environment_id, apikey, secret, verify):
     user_agent = {'User-agent': 'VxStream Sandbox'}
     params = {'apikey': apikey, 'secret': secret, 'environmentId': environment_id}
-    resource_url = '%s/%s' % (status_url, file_sha256)
+    resource_url = f'{status_url}/{file_sha256}'
 
     try:
         res = requests.get(resource_url, headers=user_agent, params=params, verify=verify)
         if res.status_code == 200:
             return res.json()
 
-        else:
-            print('Error code: {}, returned when getting file status: {}'.format(res.status_code, file_sha256))
-            return res
+        print(
+            f'Error code: {res.status_code}, returned when getting file status: {file_sha256}'
+        )
+        return res
     except requests.exceptions.HTTPError as err:
         print(err)
 
@@ -141,18 +142,16 @@ def get_file_status(file_sha256, status_url, environment_id, apikey, secret, ver
 def get_file_report(file_sha256, report_url, environment_id, type_, apikey, secret, verify):
     user_agent = {'User-agent': 'VxStream Sandbox'}
     params = {'apikey': apikey, 'secret': secret, 'environmentId': environment_id, 'type': type_}
-    resource_url = '%s/%s' % (report_url, file_sha256)
+    resource_url = f'{report_url}/{file_sha256}'
 
     try:
         res = requests.get(resource_url, headers=user_agent, params=params, verify=verify)
         if res.status_code == 200:
-            # walk entire json blob to fix
-            # the keys known to cause issues
-            remapped = remap(res.json(), visit=visit)
-            return remapped
-        else:
-            print('Error code: {}, returned when getting report: {}'.format(res.status_code, file_sha256))
-            return res
+            return remap(res.json(), visit=visit)
+        print(
+            f'Error code: {res.status_code}, returned when getting report: {file_sha256}'
+        )
+        return res
     except requests.exceptions.HTTPError as err:
         print(err)
 
@@ -170,9 +169,9 @@ def scan(filelist, conf=DEFAULTCONF):
     else:
         url = conf['API URL'] + '/'
 
-    submit_url = url + 'submit'
-    status_url = url + 'state'
-    report_url = url + 'result'
+    submit_url = f'{url}submit'
+    status_url = f'{url}state'
+    report_url = f'{url}result'
 
     for fname in filelist:
         response = post_to_vxstream(
@@ -201,12 +200,15 @@ def scan(filelist, conf=DEFAULTCONF):
 
             # If we have a report
             if status == 'SUCCESS':
-                report = get_file_report(
-                    file_sha256, report_url, conf['Environment ID'],
-                    apikey=conf['API key'], secret=conf['API secret'],
-                    type_='json', verify=conf['Verify']
-                )
-                if report:
+                if report := get_file_report(
+                    file_sha256,
+                    report_url,
+                    conf['Environment ID'],
+                    apikey=conf['API key'],
+                    secret=conf['API secret'],
+                    type_='json',
+                    verify=conf['Verify'],
+                ):
                     # Drop some additional values from report
                     for field in ['strings', 'signatures_chronology',
                                   'imageprocessing', 'multiscan']:
@@ -222,23 +224,17 @@ def scan(filelist, conf=DEFAULTCONF):
                     resultlist.append((fname, report.get('analysis', {}).get('final')))
                     tasks.remove((fname, file_sha256))
 
-            # Check for dead tasks
             elif status == 'IN_PROGRESS':
                 if file_sha256 not in task_status:
                     task_status[file_sha256] = time.time() + conf['timeout'] + conf['running timeout']
-                else:
-                    if time.time() > task_status[file_sha256]:
-                        # TODO Log timeout
-                        tasks.remove((fname, file_sha256))
+                elif time.time() > task_status[file_sha256]:
+                    # TODO Log timeout
+                    tasks.remove((fname, file_sha256))
 
-            # If there is an unknown status
             elif status == 'ERROR':
                 # TODO Log errors better
                 tasks.remove((fname, file_sha256))
         time.sleep(15)
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (resultlist, metadata)

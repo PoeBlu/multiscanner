@@ -48,9 +48,10 @@ class TestBase(LiveServerTestCase):
         app = flask_app
         app.config.update(
             TESTING=True,
-            API_LOC='http://localhost:{}'.format(self.mock_server_port),
+            API_LOC=f'http://localhost:{self.mock_server_port}',
             LIVESERVER_PORT=8943,
-            LIVESERVER_TIMEOUT=10)
+            LIVESERVER_TIMEOUT=10,
+        )
         return app
 
     def setUp(self):
@@ -72,7 +73,7 @@ class TestSubmission(TestBase):
 
     def _add_files(self, files):
         for fname in files:
-            data_file = Path(__file__).parent / 'test_files/{}'.format(fname)
+            data_file = Path(__file__).parent / f'test_files/{fname}'
             assert data_file.exists()
 
             # send file path
@@ -85,7 +86,7 @@ class TestSubmission(TestBase):
 
     def _successful_submission(self):
         val = self.driver.find_element(By.CLASS_NAME, 'progress-bar')
-        print('Progress bar: ' + str(val.text))
+        print(f'Progress bar: {str(val.text)}')
         return 'Submitted' in val.text
 
     def test_single_file_submission(self):

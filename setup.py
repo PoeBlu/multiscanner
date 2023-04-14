@@ -13,24 +13,23 @@ DEPS_LINKS_REGEX = re.compile(r'(^git+.*$)')
 
 def get_version():
     with open(VERSION_FILE) as f:
-        for line in f.readlines():
+        for line in f:
             if line.startswith('__version__'):
-                version = line.split()[-1].strip('\'')
-                return version
+                return line.split()[-1].strip('\'')
         raise AttributeError('Package does not have a __version__')
 
 
 def get_requirements(filename, dep_links_only=False):
     requirements = []
     with open(filename) as f:
-        for l in f.readlines():
+        for l in f:
             if dep_links_only is False and REQ_REGEX.match(l):
                 requirements.append(l.strip())
             elif dep_links_only is True and DEPS_LINKS_REGEX.match(l):
                 requirements.append(l.strip())
     if requirements:
         return requirements
-    msg = 'Unable to extract requirements from {}'.format(filename)
+    msg = f'Unable to extract requirements from {filename}'
     raise RuntimeError(msg)
 
 

@@ -99,10 +99,12 @@ class BasicElasticSearchStorage(storage.Storage):
         if not array:
             return True
         t = type(array[0])
-        for item in array:
-            if not isinstance(item, list) and not isinstance(item, dict) and type(item) != t:
-                return False
-        return True
+        return not any(
+            not isinstance(item, list)
+            and not isinstance(item, dict)
+            and type(item) != t
+            for item in array
+        )
 
     def normalize_list(self, array):
         """
@@ -113,21 +115,20 @@ class BasicElasticSearchStorage(storage.Storage):
         """
         # If we have a list of lists we recurse
         if isinstance(array[0], list):
-            for i in range(0, len(array)):
+            for i in range(len(array)):
                 array[i] = self.normalize_list(array[i])
-        # If we have a list of dicts look into them
         elif isinstance(array[0], dict):
-            for i in range(0, len(array)):
+            for i in range(len(array)):
                 array[i] = self.same_type_lists(array[i])
         elif not self.check_same_types(array):
-            for i in range(0, len(array)):
-                    if isinstance(array[i], list):
-                        array[i] = self.normalize_list(array[i])
-                    elif isinstance(array[i], dict):
-                        array[i] = self.same_type_lists(array[i])
-                    else:
-                        array[i] = str(array[i])
-                        if not self.warned_changed:
-                            print("WARNING: We changed some of the data types so that Elasticsearch wouldn't get angry")
-                            self.warned_changed = True
+            for i in range(len(array)):
+                if isinstance(array[i], list):
+                    array[i] = self.normalize_list(array[i])
+                elif isinstance(array[i], dict):
+                    array[i] = self.same_type_lists(array[i])
+                else:
+                    array[i] = str(array[i])
+                    if not self.warned_changed:
+                        print("WARNING: We changed some of the data types so that Elasticsearch wouldn't get angry")
+                        self.warned_changed = True
         return array

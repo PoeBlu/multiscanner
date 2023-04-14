@@ -33,19 +33,11 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if os.path.isfile(conf["path"]) or SSH:
-        return True
-    else:
-        return False
+    return bool(os.path.isfile(conf["path"]) or SSH) if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
-    if os.path.isfile(conf["path"]):
-        local = True
-    else:
-        local = False
+    local = bool(os.path.isfile(conf["path"]))
     cmdline = conf["cmdline"]
     path = conf["path"]
 
@@ -65,7 +57,7 @@ def scan(filelist, conf=DEFAULTCONF):
     # Generate scan option
     for item in filelist:
         cmd = cmdline[:]
-        cmd.append('"' + item + '"')
+        cmd.append(f'"{item}"')
 
         # print(repr(cmd))
         # print(repr(list2cmdline(cmd)))
@@ -114,7 +106,5 @@ def scan(filelist, conf=DEFAULTCONF):
 
         resultlist.append((item, threat_name))
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
+    metadata = {"Name": NAME, "Type": TYPE}
     return (resultlist, metadata)

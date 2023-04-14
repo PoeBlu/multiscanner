@@ -39,11 +39,7 @@ DEFAULTCONF = {
 def check(conf=DEFAULTCONF):
     if not conf['ENABLED']:
         return False
-    if not pefile:
-        return False
-    if None in REQUIRES:
-        return False
-    return True
+    return None not in REQUIRES if pefile else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -55,9 +51,8 @@ def scan(filelist, conf=DEFAULTCONF):
             print("DEBUG: File not in filelist")
         if not libmagicresult.startswith('PE32'):
             continue
-        result = {}
         pe = pefile.PE(fname)
-        result['pehash'] = _get_pehash(pe)
+        result = {'pehash': _get_pehash(pe)}
         check, sha = _get_rich_header(pe)
         if check:
             result['rich_header_checksum'] = check
@@ -89,16 +84,16 @@ def scan(filelist, conf=DEFAULTCONF):
         if hasattr(pe, 'VS_VERSIONINFO'):
             result['version_info'] = _get_version_info(pe)
         if hasattr(pe, 'DIRECTORY_ENTRY_TLS'):
-            ret = _get_tls_info(pe)
-            if ret:
+            if ret := _get_tls_info(pe):
                 result['tls_callback_info'] = ret
         result = convert_encoding(result)
         results.append((fname, result))
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Version"] = pefile.__version__
-    metadata["Include"] = False
+    metadata = {
+        "Name": NAME,
+        "Type": TYPE,
+        "Version": pefile.__version__,
+        "Include": False,
+    }
     return (results, metadata)
 
 
@@ -114,7 +109,7 @@ def _get_pehash(exe):
     # pad to 16 bits
     img_chars = bitstring.BitArray(bytes=img_chars.tobytes())
 
-    img_chars_xor = img_chars[0:8] ^ img_chars[8:16]
+    img_chars_xor = img_chars[:8] ^ img_chars[8:16]
 
     # start to build pehash
     pehash_bin = bitstring.BitArray(img_chars_xor)
@@ -123,7 +118,7 @@ def _get_pehash(exe):
     sub_chars = bitstring.BitArray(hex(exe.FILE_HEADER.Machine))
     # pad to 16 bits
     sub_chars = bitstring.BitArray(bytes=sub_chars.tobytes())
-    sub_chars_xor = sub_chars[0:8] ^ sub_chars[8:16]
+    sub_chars_xor = sub_chars[:8] ^ sub_chars[8:16]
     pehash_bin.append(sub_chars_xor)
 
     # Stack Commit Size
@@ -141,10 +136,7 @@ def _get_pehash(exe):
 
     # Heap Commit Size
     hp_size = bitstring.BitArray(hex(exe.OPTIONAL_HEADER.SizeOfHeapCommit))
-    if PY3:
-        hp_size_bits = hp_size.bin.zfill(32)
-    else:
-        hp_size_bits = string.zfill(hp_size.bin, 32)
+    hp_size_bits = hp_size.bin.zfill(32) if PY3 else string.zfill(hp_size.bin, 32)
     # now xor the bits
     hp_size = bitstring.BitArray(bin=hp_size_bits)
     hp_size_xor = hp_size[8:16] ^ hp_size[16:24] ^ hp_size[24:32]
@@ -163,10 +155,7 @@ def _get_pehash(exe):
         # rawsize
         sect_rs = bitstring.BitArray(hex(section.SizeOfRawData))
         sect_rs = bitstring.BitArray(bytes=sect_rs.tobytes())
-        if PY3:
-            sect_rs_bits = sect_rs.bin.zfill(32)
-        else:
-            sect_rs_bits = string.zfill(sect_rs.bin, 32)
+        sect_rs_bits = sect_rs.bin.zfill(32) if PY3 else string.zfill(sect_rs.bin, 32)
         sect_rs = bitstring.BitArray(bin=sect_rs_bits)
         sect_rs = bitstring.BitArray(bytes=sect_rs.tobytes())
         sect_rs_bits = sect_rs[8:32]
@@ -184,19 +173,18 @@ def _get_pehash(exe):
         raw = exe.write()[address + size:]
         if size == 0:
             kolmog = bitstring.BitArray(float=1, length=32)
-            pehash_bin.append(kolmog[0:8])
+            pehash_bin.append(kolmog[:8])
             continue
         bz2_raw = bz2.compress(raw)
         bz2_size = len(bz2_raw)
         # k = round(bz2_size / size, 5)
         k = bz2_size / size
         kolmog = bitstring.BitArray(float=k, length=32)
-        pehash_bin.append(kolmog[0:8])
+        pehash_bin.append(kolmog[:8])
 
     m = hashlib.sha1()
     m.update(pehash_bin.tobytes())
-    output = m.hexdigest()
-    return output
+    return m.hexdigest()
 
 # http://www.ntcore.com/files/richsign.htm
 
@@ -247,7 +235,7 @@ def _dump_resource_data(name, dir, pe, save):
             if hasattr(i, 'data'):
                 x = i.data
                 rva = x.struct.OffsetToData
-                "%s_%s_%s" % (name, i.name, x.struct.name)
+                f"{name}_{i.name}_{x.struct.name}"
                 size = x.struct.Size
                 data = pe.get_memory_mapped_image()[rva:rva + size]
                 if not data:
@@ -270,8 +258,11 @@ def _dump_resource_data(name, dir, pe, save):
                 resultlist.append(results)
             if hasattr(i, "directory"):
                 # self._debug("Parsing next directory entry %s" % i.name)
-                resultlist.extend(_dump_resource_data(name + "_%s" % i.name,
-                                         i.directory, pe, save))
+                resultlist.extend(
+                    _dump_resource_data(
+                        f"{name}_{i.name}", i.directory, pe, save
+                    )
+                )
         except Exception as e:
             print('pefile:', e)
             return None
@@ -308,10 +299,7 @@ def _get_imports(pe):
                     entry.dll = entry.dll.decode('utf-8')
                 if isinstance(imp.ordinal, bytes):
                     entry.dll = imp.ordinal.decode('utf-8')
-                if imp.name:
-                    name = imp.name
-                else:
-                    name = "%s#%s" % (entry.dll, imp.ordinal)
+                name = imp.name if imp.name else f"{entry.dll}#{imp.ordinal}"
                 data = {
                         "dll": entry.dll,
                         "ordinal": imp.ordinal,
@@ -340,10 +328,7 @@ def _get_exports(pe):
 def _get_timestamp(pe):
     try:
         timestamp = pe.FILE_HEADER.TimeDateStamp
-        time_string = strftime('%Y-%m-%d %H:%M:%S', localtime(timestamp))
-        # data = {"raw": timestamp}
-        # self._add_result('pe_timestamp', time_string, data)
-        return time_string
+        return strftime('%Y-%m-%d %H:%M:%S', localtime(timestamp))
     except Exception as e:
         # self._parse_error("timestamp", e)
         return None
@@ -382,29 +367,31 @@ def _get_debug_info(pe):
                         # http://www.debuginfo.com/articles/debuginfomatch.html
                         # as far as I can tell the gold is in RSDS and NB10
                         if debug_data[:4] == "RSDS":
-                            result.update({
-                                'DebugSig': debug_data[0x00:0x04],
-                                'DebugGUID': binascii.hexlify(debug_data[0x04:0x14]),
-                                'DebugAge': struct.unpack('I', debug_data[0x14:0x18])[0],
-                            })
+                            result |= {
+                                'DebugSig': debug_data[:0x04],
+                                'DebugGUID': binascii.hexlify(
+                                    debug_data[0x04:0x14]
+                                ),
+                                'DebugAge': struct.unpack(
+                                    'I', debug_data[0x14:0x18]
+                                )[0],
+                            }
                             if dbg.struct.SizeOfData > 0x18:
                                 dbg_path = debug_data[0x18:dbg.struct.SizeOfData - 1].decode('UTF-8', errors='replace')
-                                result.update({
-                                    'DebugPath': "%s" % dbg_path,
-                                    'result': "%s" % dbg_path,
-                                })
+                                result |= {'DebugPath': f"{dbg_path}", 'result': f"{dbg_path}"}
                         if debug_data[:4] == "NB10":
-                            result.update({
-                                'DebugSig': debug_data[0x00:0x04],
-                                'DebugTime': struct.unpack('I', debug_data[0x08:0x0c])[0],
-                                'DebugAge': struct.unpack('I', debug_data[0x0c:0x10])[0],
-                            })
+                            result |= {
+                                'DebugSig': debug_data[:0x04],
+                                'DebugTime': struct.unpack(
+                                    'I', debug_data[0x08:0x0C]
+                                )[0],
+                                'DebugAge': struct.unpack(
+                                    'I', debug_data[0x0C:0x10]
+                                )[0],
+                            }
                             if dbg.struct.SizeOfData > 0x10:
                                 dbg_path = debug_data[0x10:dbg.struct.SizeOfData - 1].decode('UTF-8', errors='replace')
-                                result.update({
-                                    'DebugPath': "%s" % dbg_path,
-                                    'result': "%s" % dbg_path,
-                                })
+                                result |= {'DebugPath': f"{dbg_path}", 'result': f"{dbg_path}"}
                 # self._add_result('pe_debug', dbg_path, result)
                 results[dbg_path] = result
     except Exception as e:
@@ -414,61 +401,61 @@ def _get_debug_info(pe):
 
 
 def _get_version_info(pe):
+    if not hasattr(pe, 'FileInfo'):
+        return
     results = {}
-    if hasattr(pe, 'FileInfo'):
-        try:
-            for entry in pe.FileInfo:
-                if hasattr(entry, 'StringTable'):
-                    for st_entry in entry.StringTable:
-                        for str_entry in st_entry.entries.items():
+    try:
+        for entry in pe.FileInfo:
+            if hasattr(entry, 'StringTable'):
+                for st_entry in entry.StringTable:
+                    for str_entry in st_entry.entries.items():
+                        try:
+                            value = str_entry[1].encode('ascii')
+                            # result = {
+                            #     'key': str_entry[0],
+                            #     'value': value,
+                            # }
+                        except Exception as e:
+                            # TODO: log exception
+                            value = str_entry[1].encode('ascii', errors='ignore')
+                            # raw = binascii.hexlify(str_entry[1].encode('utf-8'))
+                            # result = {
+                            #     'key': str_entry[0],
+                            #     'value': value,
+                            #     'raw': raw,
+                            # }
+                        # result_name = str_entry[0] + ': ' + value[:255]
+                        # self._add_result('version_info', result_name, result)
+                        results[str_entry[0]] = value[:255]
+            elif hasattr(entry, 'Var'):
+                for var_entry in entry.Var:
+                    if hasattr(var_entry, 'entry'):
+                        for key in var_entry.entry.keys():
                             try:
-                                value = str_entry[1].encode('ascii')
+                                value = var_entry.entry[key].encode('ascii')
                                 # result = {
-                                #     'key': str_entry[0],
+                                #     'key': key,
                                 #     'value': value,
                                 # }
                             except Exception as e:
                                 # TODO: log exception
-                                value = str_entry[1].encode('ascii', errors='ignore')
-                                # raw = binascii.hexlify(str_entry[1].encode('utf-8'))
+                                value = var_entry.entry[key].encode('ascii', errors='ignore')
+                                # raw = binascii.hexlify(var_entry.entry[key])
                                 # result = {
-                                #     'key': str_entry[0],
+                                #     'key': key,
                                 #     'value': value,
                                 #     'raw': raw,
                                 # }
-                            # result_name = str_entry[0] + ': ' + value[:255]
-                            # self._add_result('version_info', result_name, result)
-                            results[str_entry[0]] = value[:255]
-                elif hasattr(entry, 'Var'):
-                    for var_entry in entry.Var:
-                        if hasattr(var_entry, 'entry'):
-                            for key in var_entry.entry.keys():
-                                try:
-                                    value = var_entry.entry[key].encode('ascii')
-                                    # result = {
-                                    #     'key': key,
-                                    #     'value': value,
-                                    # }
-                                except Exception as e:
-                                    # TODO: log exception
-                                    value = var_entry.entry[key].encode('ascii', errors='ignore')
-                                    # raw = binascii.hexlify(var_entry.entry[key])
-                                    # result = {
-                                    #     'key': key,
-                                    #     'value': value,
-                                    #     'raw': raw,
-                                    # }
-                                # result_name = key + ': ' + value
-                                # self._add_result('version_var', result_name, result)
-                                results[key] = value
-        except Exception as e:
-            pass
-            # self._parse_error("version info", e)
-        return results
+                            # result_name = key + ': ' + value
+                            # self._add_result('version_var', result_name, result)
+                            results[key] = value
+    except Exception as e:
+        pass
+        # self._parse_error("version info", e)
+    return results
 
 
 def _get_tls_info(pe):
-    results = {}
     # self._info("TLS callback table listed at 0x%08x" % pe.DIRECTORY_ENTRY_TLS.struct.AddressOfCallBacks)
     callback_array_rva = pe.DIRECTORY_ENTRY_TLS.struct.AddressOfCallBacks - pe.OPTIONAL_HEADER.ImageBase
 
@@ -479,15 +466,6 @@ def _get_tls_info(pe):
         callback_functions.append(pe.get_dword_from_data(pe.get_data(callback_array_rva + 4 * idx, 4), 0))
         idx += 1
 
-    # if we start with a NULL ptr, then there are no callback functions
     if idx == 0:
         return None
-        # self._info("No TLS callback functions supported")
-    else:
-        for idx, va in enumerate(callback_functions):
-            va_string = "0x%08x" % va
-            # self._info("TLS callback function at %s" % va_string)
-            # data = {'Callback Function': idx}
-            # self._add_result('tls_callback', va_string, data)
-            results[va_string] = idx
-    return results
+    return {"0x%08x" % va: idx for idx, va in enumerate(callback_functions)}

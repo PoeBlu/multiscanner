@@ -15,10 +15,7 @@ def create_stix2_bundle(objects):
         A ``stix2.Bundle`` instance.
 
     '''
-    if objects:
-        return v20.Bundle(objects=objects)
-    else:
-        return v20.Bundle()
+    return v20.Bundle(objects=objects) if objects else v20.Bundle()
 
 
 def join_stix2_comparison_expression(comp_exps, obs_operator):
@@ -91,13 +88,14 @@ def create_stix2_observation_expression(comp_exps, obs_operator=None):
         http://docs.oasis-open.org/cti/stix/v2.0/cs01/part5-stix-patterning/stix-v2.0-cs01-part5-stix-patterning.html
 
     '''
-    if isinstance(comp_exps, list) and len(comp_exps) > 1:
-        # The obs_operator is required for this operation.
-        return '[ {pattern} ]'.format(
-            pattern=join_stix2_comparison_expression(comp_exps, obs_operator)
-        )
-    elif isinstance(comp_exps, list) and len(comp_exps) == 1:
-        return '[ {pattern} ]'.format(pattern=comp_exps[0])
+    if isinstance(comp_exps, list):
+        if len(comp_exps) > 1:
+            # The obs_operator is required for this operation.
+            return '[ {pattern} ]'.format(
+                pattern=join_stix2_comparison_expression(comp_exps, obs_operator)
+            )
+        elif len(comp_exps) == 1:
+            return '[ {pattern} ]'.format(pattern=comp_exps[0])
     return '[ {pattern} ]'.format(pattern=comp_exps)
 
 
@@ -192,13 +190,9 @@ def extract_http_requests_cuckoo(signature, custom_labels=None):
         labels.extend(custom_labels)
 
     for ioc_mark in signature.get('marks', []):
-        ioc = ioc_mark.get('ioc', '')
-        if ioc:
+        if ioc := ioc_mark.get('ioc', ''):
             url_value = ioc.split()
-            if len(url_value) > 1:
-                url_value = url_value[1]
-            else:
-                url_value = url_value[0]
+            url_value = url_value[1] if len(url_value) > 1 else url_value[0]
             ioc_pattern = create_stix2_observation_expression(
                 create_stix2_comparison_expression('url:value', '=', url_value)
             )
@@ -243,8 +237,7 @@ def parse_json_report_to_stix2_bundle(report, custom_labels=None):
             all_objects.extend(extract_http_requests_cuckoo(signature, custom_labels))
     for dropped in cuckoo.get('dropped', []):
         if dropped and any(x in dropped for x in ('sha256', 'md5', 'sha1', 'ssdeep')):
-            ind = extract_file_cuckoo(dropped, custom_labels)
-            if ind:
+            if ind := extract_file_cuckoo(dropped, custom_labels):
                 all_objects.append(ind)
 
     # Extract information from file submission and create Indicator

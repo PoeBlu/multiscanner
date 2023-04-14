@@ -43,7 +43,7 @@ def scan(filelist, conf=DEFAULTCONF):
 
     timestamp = str(time.time()).replace('.', '-')
     for fname in filelist:
-        filename = timestamp + "-" + os.path.basename(fname)
+        filename = f"{timestamp}-{os.path.basename(fname)}"
         for img in FireEyeImages:
             shutil.copyfile(fname, os.path.join(base, img, FESrc, filename))
             waitlist.append((filename, img, fname))
@@ -66,7 +66,5 @@ def scan(filelist, conf=DEFAULTCONF):
             result.sort()
             resultlist.append((key, result))
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
+    metadata = {"Name": NAME, "Type": TYPE}
     return (resultlist, metadata)

@@ -20,12 +20,7 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED']:
-        return False
-    if magic:
-        return True
-    else:
-        return False
+    return bool(magic) if conf['ENABLED'] else False
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -45,8 +40,5 @@ def scan(filelist, conf=DEFAULTCONF):
             result = result.decode('UTF-8', 'replace')
         results.append((fname, result))
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (results, metadata)

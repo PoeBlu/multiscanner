@@ -55,9 +55,7 @@ def scan(filelist, conf=DEFAULTCONF):
     cmdline = [conf["path"]]
     cmdline.extend(conf["cmdline"])
     # Generate scan option
-    for item in filelist:
-        cmdline.append('"' + item + '"')
-
+    cmdline.extend(f'"{item}"' for item in filelist)
     output = ""
     if local:
         try:
@@ -77,7 +75,6 @@ def scan(filelist, conf=DEFAULTCONF):
     output = output.decode("utf-8")
     output = output.replace('\r', '')
     output = output.split('\n')
-    results = []
     fresults = {}
     fname = None
     for line in output:
@@ -92,14 +89,11 @@ def scan(filelist, conf=DEFAULTCONF):
             continue
 
         if fname:
-            virusresults = re.findall(r"\s*(\d+.\d+\%) \((\.[^\)]+)\) (.+) \(\d+/", line)
-            if virusresults:
+            if virusresults := re.findall(
+                r"\s*(\d+.\d+\%) \((\.[^\)]+)\) (.+) \(\d+/", line
+            ):
                 confidence, exnt, ftype = virusresults[0]
                 fresults[fname].append([confidence, ftype, exnt])
-    for fname in fresults:
-        results.append((fname, fresults[fname]))
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    results = list(fresults.items())
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (results, metadata)

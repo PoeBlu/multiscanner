@@ -96,12 +96,11 @@ DEFAULTCONF = {
 # Customize timestamp format output of jsonify()
 class CustomJSONEncoder(JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, datetime):
-            if obj.utcoffset() is not None:
-                obj = obj - obj.utcoffset()
-            return str(obj)
-        else:
+        if not isinstance(obj, datetime):
             return JSONEncoder.default(self, obj)
+        if obj.utcoffset() is not None:
+            obj = obj - obj.utcoffset()
+        return str(obj)
 
 
 app = Flask(__name__)
@@ -140,12 +139,12 @@ try:
 except (configparser.NoSectionError, configparser.NoOptionError):
     db_num_retries = database.Database.DEFAULTCONF['retry_num']
 
-for x in range(0, db_num_retries):
+for x in range(db_num_retries):
     try:
         db.init_db()
     except Exception as excinfo:
         db_error = excinfo
-        print("ERROR: Can't connect to task database.", excinfo)
+        print("ERROR: Can't connect to task database.", db_error)
     else:
         break
 
@@ -199,16 +198,13 @@ def multiscanner_process(work_queue, exit_signal):
             while len(metadata_list) < batch_size:
                 metadata_list.append(work_queue.get_nowait())
         except queue.Empty:
-            if metadata_list and time_stamp:
-                if len(metadata_list) >= batch_size:
-                    pass
-                elif time.time() - time_stamp > batch_interval:
-                    pass
-                else:
-                    continue
-            else:
+            if not metadata_list or not time_stamp:
                 continue
 
+            if len(metadata_list) >= batch_size:
+                pass
+            elif time.time() - time_stamp <= batch_interval:
+                continue
         filelist = [item[0] for item in metadata_list]
         # modulelist = [item[5] for item in metadata_list]
         resultlist = multiscan(
@@ -305,11 +301,7 @@ def search(params, get_all=False):
     # Pass search term to Elasticsearch, get back list of sample_ids
     search_term = params.get('search[value]')
     search_type = params.pop('search_type', 'default')
-    if not search_term:
-        es_result = None
-    else:
-        es_result = handler.search(search_term, search_type)
-
+    es_result = handler.search(search_term, search_type) if search_term else None
     # Search the task db for the ids we got from Elasticsearch
     if get_all:
         return db.search(params, es_result, return_all=True)
@@ -345,8 +337,7 @@ def get_task(task_id):
     Return a JSON dictionary corresponding
     to the given task ID.
     '''
-    task = db.get_task(task_id)
-    if task:
+    if task := db.get_task(task_id):
         return jsonify({'Task': task.to_dict()})
     else:
         abort(HTTP_NOT_FOUND)
@@ -359,8 +350,7 @@ def get_task_sha256(sha256):
     given SHA256 hash.
     '''
     if re.match(r'^[a-fA-F0-9]{64}$', sha256):
-        task_id = db.exists(sha256)
-        if task_id:
+        if task_id := db.exists(sha256):
             return make_response(
                 jsonify({'TaskID': int(task_id)}),
                 HTTP_OK)
@@ -434,8 +424,7 @@ def queue_task(original_filename, f_name, full_path, metadata, rescan=False):
     # If option set, or no scan exists for this sample, skip and scan sample again
     # Otherwise, pull latest scan for this sample
     if not rescan:
-        t_exists = db.exists(f_name)
-        if t_exists:
+        if t_exists := db.exists(f_name):
             return t_exists
 
     # Add task to sqlite DB
@@ -472,7 +461,7 @@ def create_task():
             return make_response(
                 jsonify({'Message': 'Cannot import report with \'Scan Time\' of invalid format!'}),
                 HTTP_BAD_REQUEST)
-        except (UnicodeDecodeError, ValueError):
+        except ValueError:
             return make_response(
                 jsonify({'Message': 'Cannot import non-JSON files!'}),
                 HTTP_BAD_REQUEST)
@@ -536,11 +525,10 @@ def create_task():
                     tid = queue_task(uzfile, f_name, full_path, metadata, rescan=rescan)
                     task_id_list.append(tid)
             except RuntimeError as e:
-                msg = "ERROR: Failed to extract " + str(file_) + ' - ' + str(e)
+                msg = f"ERROR: Failed to extract {str(file_)} - {str(e)}"
                 return make_response(
                     jsonify({'Message': msg}),
                     HTTP_BAD_REQUEST)
-        # Extract a rar
         elif rarfile.is_rarfile(file_):
             r = rarfile.RarFile(file_)
             try:
@@ -551,7 +539,7 @@ def create_task():
                     tid = queue_task(urfile, f_name, full_path, metadata, rescan=rescan)
                     task_id_list.append(tid)
             except RuntimeError as e:
-                msg = "ERROR: Failed to extract " + str(file_) + ' - ' + str(e)
+                msg = f"ERROR: Failed to extract {str(file_)} - {str(e)}"
                 return make_response(
                     jsonify({'Message': msg}),
                     HTTP_BAD_REQUEST)
@@ -579,11 +567,13 @@ def get_report(task_id):
 
     report_dict, success = get_report_dict(task_id)
     if success:
-        if download == 't' or download == 'y' or download == '1':
+        if download in ['t', 'y', '1']:
             # raw JSON
             response = make_response(jsonify(report_dict))
             response.headers['Content-Type'] = 'application/json'
-            response.headers['Content-Disposition'] = 'attachment; filename=%s.json' % task_id
+            response.headers[
+                'Content-Disposition'
+            ] = f'attachment; filename={task_id}.json'
             return response
         else:
             # processed JSON intended for web UI
@@ -629,17 +619,15 @@ def _add_links(report_dict):
 
     web_loc = api_config['api']['web_loc']
 
-    # ssdeep matches
-    matches_dict = report_dict.get('Report', {}) \
-                              .get('ssdeep', {}) \
-                              .get('matches', {})
-
-    if matches_dict:
+    if (
+        matches_dict := report_dict.get('Report', {})
+        .get('ssdeep', {})
+        .get('matches', {})
+    ):
         links_dict = {}
         # k=SHA256, v=ssdeep.compare result
         for k, v in matches_dict.items():
-            t_id = db.exists(k)
-            if t_id:
+            if t_id := db.exists(k):
                 url = '{h}/report/{t_id}'.format(h=web_loc, t_id=t_id)
                 href = _linkify(k, url, True)
                 links_dict[href] = v
@@ -691,68 +679,66 @@ def get_files_task():
     '''
     task_ids = request.args.get('task_ids', default=None)
 
-    if task_ids is not None:
-        task_ids = task_ids.split(',')
-        uuidv4 = str(uuid.uuid4())
-        zipname = uuidv4 + '.zip'
-        zip_command = ['/usr/bin/zip', '-j',
-                       safe_join('/tmp', zipname),
-                       '-P', 'infected']
-
-        try:
-            for t in task_ids:
-                value = int(t)
-                if value <= 0:
-                    raise ValueError
-
-                try:
-                    sha256 = db.get_task(t).sample_id
-                except AttributeError:
-                    return make_response(
-                            jsonify({'Error': 'Task {} not found!'.format(t)}),
-                            HTTP_NOT_FOUND)
-
-                if re.match(r'^[a-fA-F0-9]{64}$', sha256):
-                    file_path = safe_join(api_config['api']['upload_folder'], sha256)
-                    if not os.path.exists(file_path):
-                        abort(HTTP_NOT_FOUND)
-
-                    with open(file_path, 'rb') as fh:
-                        fh_content = fh.read()
-
-                    rawname = sha256 + '.bin'
-                    with open(safe_join('/tmp/', rawname), 'wb') as raw_fh:
-                        raw_fh.write(fh_content)
-
-                    zip_command.insert(3, safe_join('/tmp', rawname))
-                else:
-                    return jsonify({'Error': 'sha256 invalid!'})
-        except ValueError:
-            abort(HTTP_BAD_REQUEST)
-
-        proc = subprocess.Popen(zip_command)
-        wait_seconds = 30
-
-        while proc.poll() is None and wait_seconds:
-            time.sleep(1)
-            wait_seconds -= 1
-
-        if proc.returncode:
-            return make_response(jsonify({'Error': 'Failed to create zip ()'.format(proc.returncode)}))
-        elif not wait_seconds:
-            proc.terminate()
-            return make_response(jsonify({'Error': 'Process timed out'}))
-        else:
-            with open(safe_join('/tmp', zipname), 'rb') as zip_fh:
-                zip_data = zip_fh.read()
-            if len(zip_data) == 0:
-                return make_response(jsonify({'Error': 'Zip file empty'}))
-            response = make_response(zip_data)
-            response.headers['Content-Type'] = 'application/zip; charset=UTF-8'
-            response.headers['Content-Disposition'] = 'inline; filename={}.zip'.format(uuidv4)
-            return response
-    else:
+    if task_ids is None:
         return jsonify({'Error': 'empty request'})
+    task_ids = task_ids.split(',')
+    uuidv4 = str(uuid.uuid4())
+    zipname = f'{uuidv4}.zip'
+    zip_command = ['/usr/bin/zip', '-j',
+                   safe_join('/tmp', zipname),
+                   '-P', 'infected']
+
+    try:
+        for t in task_ids:
+            value = int(t)
+            if value <= 0:
+                raise ValueError
+
+            try:
+                sha256 = db.get_task(t).sample_id
+            except AttributeError:
+                return make_response(
+                    jsonify({'Error': f'Task {t} not found!'}), HTTP_NOT_FOUND
+                )
+
+            if not re.match(r'^[a-fA-F0-9]{64}$', sha256):
+                return jsonify({'Error': 'sha256 invalid!'})
+            file_path = safe_join(api_config['api']['upload_folder'], sha256)
+            if not os.path.exists(file_path):
+                abort(HTTP_NOT_FOUND)
+
+            with open(file_path, 'rb') as fh:
+                fh_content = fh.read()
+
+            rawname = f'{sha256}.bin'
+            with open(safe_join('/tmp/', rawname), 'wb') as raw_fh:
+                raw_fh.write(fh_content)
+
+            zip_command.insert(3, safe_join('/tmp', rawname))
+    except ValueError:
+        abort(HTTP_BAD_REQUEST)
+
+    proc = subprocess.Popen(zip_command)
+    wait_seconds = 30
+
+    while proc.poll() is None and wait_seconds:
+        time.sleep(1)
+        wait_seconds -= 1
+
+    if proc.returncode:
+        return make_response(jsonify({'Error': 'Failed to create zip ()'.format(proc.returncode)}))
+    elif not wait_seconds:
+        proc.terminate()
+        return make_response(jsonify({'Error': 'Process timed out'}))
+    else:
+        with open(safe_join('/tmp', zipname), 'rb') as zip_fh:
+            zip_data = zip_fh.read()
+        if len(zip_data) == 0:
+            return make_response(jsonify({'Error': 'Zip file empty'}))
+        response = make_response(zip_data)
+        response.headers['Content-Type'] = 'application/zip; charset=UTF-8'
+        response.headers['Content-Disposition'] = f'inline; filename={uuidv4}.zip'
+        return response
 
 
 @app.route('/api/v1/tasks/<int:task_id>/maec', methods=['GET'])
@@ -779,7 +765,9 @@ def get_maec_report(task_id):
     # raw JSON
     response = make_response(jsonify(maec_report.json()))
     response.headers['Content-Type'] = 'application/json'
-    response.headers['Content-Disposition'] = 'attachment; filename=%s.json' % task_id
+    response.headers[
+        'Content-Disposition'
+    ] = f'attachment; filename={task_id}.json'
     return response
 
 
@@ -789,8 +777,7 @@ def get_report_dict(task_id):
         abort(HTTP_NOT_FOUND)
 
     if task.task_status == 'Complete':
-        result = handler.get_report(task.sample_id, task.timestamp)
-        if result:
+        if result := handler.get_report(task.sample_id, task.timestamp):
             return {'Report': result}, True
         else:
             return {'Report': 'Error occurred in ElasticSearch'}, False
@@ -929,14 +916,14 @@ def files_get_sha256_helper(sha256, raw='f'):
         response = make_response(fh_content)
         response.headers['Content-Type'] = 'application/octet-stream; charset=UTF-8'
         # better way to include fname?
-        response.headers['Content-Disposition'] = 'inline; filename={}.bin'.format(sha256)
+        response.headers['Content-Disposition'] = f'inline; filename={sha256}.bin'
     else:
         # ref: https://github.com/crits/crits/crits/core/data_tools.py#L122
-        rawname = sha256 + '.bin'
+        rawname = f'{sha256}.bin'
         with open(safe_join('/tmp/', rawname), 'wb') as raw_fh:
             raw_fh.write(fh_content)
 
-        zipname = sha256 + '.zip'
+        zipname = f'{sha256}.zip'
         args = ['/usr/bin/zip', '-j',
                 safe_join('/tmp', zipname),
                 safe_join('/tmp', rawname),
@@ -959,7 +946,7 @@ def files_get_sha256_helper(sha256, raw='f'):
                 return make_response(jsonify({'Error': 'Zip file empty'}))
             response = make_response(zip_data)
             response.headers['Content-Type'] = 'application/zip; charset=UTF-8'
-            response.headers['Content-Disposition'] = 'inline; filename={}.zip'.format(sha256)
+            response.headers['Content-Disposition'] = f'inline; filename={sha256}.zip'
     return response
 
 
@@ -972,11 +959,10 @@ def run_ssdeep_compare():
         if DISTRIBUTED:
             # Publish task to Celery
             ssdeep_compare_celery.delay()
-            return make_response(jsonify({'Message': 'Success'}))
         else:
             ssdeep_analytic = SSDeepAnalytic()
             ssdeep_analytic.ssdeep_compare()
-            return make_response(jsonify({'Message': 'Success'}))
+        return make_response(jsonify({'Message': 'Success'}))
     except Exception as e:
         return make_response(
             jsonify({'Message': 'Unable to complete request.'}),
@@ -1011,7 +997,7 @@ def get_pdf_report(task_id):
     pdf = pdf_generator.create_pdf_document(MS_CONFIG, report_dict)
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = 'attachment; filename=%s.pdf' % task_id
+    response.headers['Content-Disposition'] = f'attachment; filename={task_id}.pdf'
     return response
 
 
@@ -1030,13 +1016,14 @@ def get_stix2_bundle_from_report(task_id):
     formatting = request.args.get('pretty', default='False', type=str)[0].lower()
     custom_labels = request.args.get('custom_labels', default='', type=str).split(",")
 
-    if formatting == 't' or formatting == 'y' or formatting == '1':
-        formatting = True
-    else:
-        formatting = False
-
+    formatting = formatting in ['t', 'y', '1']
     # If list is empty or any entry in the list is empty -> clear labels
-    if custom_labels or all(custom_labels) is False:
+    if (
+        custom_labels
+        or not custom_labels
+        and not custom_labels
+        and not all(custom_labels)
+    ):
         custom_labels = []
 
     # If the report has no key/value pairs that we can use to create
@@ -1047,7 +1034,9 @@ def get_stix2_bundle_from_report(task_id):
     # Setting pretty=True can be an expensive operation!
     response = make_response(bundle.serialize(pretty=formatting))
     response.headers['Content-Type'] = 'application/json'
-    response.headers['Content-Disposition'] = 'attachment; filename=%s_bundle_stix2.json' % task_id
+    response.headers[
+        'Content-Disposition'
+    ] = f'attachment; filename={task_id}_bundle_stix2.json'
     return response
 
 

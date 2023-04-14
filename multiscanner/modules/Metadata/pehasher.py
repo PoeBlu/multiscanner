@@ -35,12 +35,7 @@ DEFAULTCONF = {
 
 
 def check(conf=DEFAULTCONF):
-    if not conf['ENABLED'] or \
-       not pefile or \
-       not pehash or \
-       None in REQUIRES:
-        return False
-    return True
+    return bool(conf['ENABLED'] and pefile and pehash and None not in REQUIRES)
 
 
 def scan(filelist, conf=DEFAULTCONF):
@@ -58,11 +53,8 @@ def scan(filelist, conf=DEFAULTCONF):
             try:
                 pe_hashes[name] = hasher(pe=pe, raise_on_error=True).hexdigest()
             except Exception as e:
-                print('pehash ({}):'.format(name), e)
+                print(f'pehash ({name}):', e)
         results.append((fname, pe_hashes))
 
-    metadata = {}
-    metadata["Name"] = NAME
-    metadata["Type"] = TYPE
-    metadata["Include"] = False
+    metadata = {"Name": NAME, "Type": TYPE, "Include": False}
     return (results, metadata)
